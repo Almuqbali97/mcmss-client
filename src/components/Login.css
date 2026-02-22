@@ -77,3 +77,31 @@
   border-radius: 5px;
   margin-bottom: 1rem;
 }
+
+.password-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.password-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
+.password-toggle input {
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: #495057;
+}

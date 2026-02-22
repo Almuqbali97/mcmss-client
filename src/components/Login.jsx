@@ -16,6 +16,9 @@ function Login({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirm, setShowSignupConfirm] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -130,6 +133,9 @@ function Login({ onLogin }) {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setShowPassword(false);
+    setShowSignupPassword(false);
+    setShowSignupConfirm(false);
     setFirstName('');
     setLastName('');
     setOtp('');
@@ -198,7 +204,7 @@ function Login({ onLogin }) {
               <div className="form-group">
                 <label htmlFor="signup-password">Password</label>
                 <input
-                  type="password"
+                  type={showSignupPassword ? 'text' : 'password'}
                   id="signup-password"
                   className="form-control"
                   value={password}
@@ -207,12 +213,20 @@ function Login({ onLogin }) {
                   placeholder="Enter your password (min. 6 characters)"
                   minLength={6}
                 />
+                <label className="password-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showSignupPassword}
+                    onChange={(e) => setShowSignupPassword(e.target.checked)}
+                  />
+                  <span>Show password</span>
+                </label>
               </div>
 
               <div className="form-group">
                 <label htmlFor="confirm-password">Confirm Password</label>
                 <input
-                  type="password"
+                  type={showSignupConfirm ? 'text' : 'password'}
                   id="confirm-password"
                   className="form-control"
                   value={confirmPassword}
@@ -221,6 +235,14 @@ function Login({ onLogin }) {
                   placeholder="Confirm your password"
                   minLength={6}
                 />
+                <label className="password-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showSignupConfirm}
+                    onChange={(e) => setShowSignupConfirm(e.target.checked)}
+                  />
+                  <span>Show password</span>
+                </label>
               </div>
 
               <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
@@ -318,7 +340,7 @@ function Login({ onLogin }) {
             <div className="form-group">
               <label htmlFor="password">Password</label>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 id="password"
                 className="form-control"
                 value={password}
@@ -326,8 +348,16 @@ function Login({ onLogin }) {
                 required
                 placeholder="Enter your password"
               />
-              <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
-                <Link to="/forgot-password" className="link-button" style={{ marginLeft: 0, fontSize: '0.85rem' }}>
+              <div className="password-row">
+                <label className="password-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                  />
+                  <span>Show password</span>
+                </label>
+                <Link to="/forgot-password" className="link-button" style={{ fontSize: '0.85rem' }}>
                   Forgot password?
                 </Link>
               </div>
