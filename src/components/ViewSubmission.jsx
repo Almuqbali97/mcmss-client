@@ -186,6 +186,14 @@ function ViewSubmission({ user }) {
               </>
             )}
             <p><strong>Masters/PhD Award:</strong> {formData.mastersOrPhd || 'N/A'}</p>
+            {formData.mastersOrPhd === 'Yes' && (
+              <div className="award-details-view">
+                <h4>Award details</h4>
+                <p><strong>Research student (Masters/PhD):</strong> {formData.researchStudent || 'N/A'}</p>
+                <p><strong>Supervisor's name:</strong> {formData.supervisorName || 'N/A'}</p>
+                <p><strong>Supervisor's signature:</strong> {formData.supervisorSignature || 'N/A'}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -200,7 +208,7 @@ function ViewSubmission({ user }) {
                 <strong>Information Sheet Files:</strong>
                 <ul>
                   {formData.informationSheetFiles.map((file, index) => (
-                    <li key={index}>{file.name || file}</li>
+                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
                   ))}
                 </ul>
               </div>
@@ -210,7 +218,7 @@ function ViewSubmission({ user }) {
                 <strong>Consent Form Files:</strong>
                 <ul>
                   {formData.consentFormFiles.map((file, index) => (
-                    <li key={index}>{file.name || file}</li>
+                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
                   ))}
                 </ul>
               </div>
@@ -308,7 +316,7 @@ function ViewSubmission({ user }) {
                 <strong>Sample Size Calculation Files:</strong>
                 <ul>
                   {formData.sampleSizeFiles.map((file, index) => (
-                    <li key={index}>{file.name || file}</li>
+                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
                   ))}
                 </ul>
               </div>
@@ -318,7 +326,7 @@ function ViewSubmission({ user }) {
                 <strong>Research Proposal Files:</strong>
                 <ul>
                   {formData.researchProposalFiles.map((file, index) => (
-                    <li key={index}>{file.name || file}</li>
+                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
                   ))}
                 </ul>
               </div>

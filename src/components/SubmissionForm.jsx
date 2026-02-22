@@ -60,9 +60,12 @@ function SubmissionForm({ user }) {
       email: user?.email || '',
       isFromMCMSS: ''
     },
-    coInvestigatorsCount: '0',
-    coInvestigators: [],
+    coInvestigatorsCount: '1',
+    coInvestigators: [{ name: '', post: '', institute: '' }],
     mastersOrPhd: '',
+    researchStudent: '',
+    supervisorName: '',
+    supervisorSignature: '',
     researchType: [],
     dataCollectionType: '',
     informationSheet: '',
@@ -218,8 +221,13 @@ function SubmissionForm({ user }) {
         return formData.researchTitle && formData.consentAcknowledged;
       case 2:
         const pi = formData.principalInvestigator;
-        return pi.fullName && pi.jobTitle && pi.hospital && pi.department && 
-               pi.qualifications && pi.telephone && pi.email && pi.isFromMCMSS === 'Yes';
+        const baseValid = pi.fullName && pi.jobTitle && pi.hospital && pi.department &&
+               pi.qualifications && pi.telephone && pi.email && pi.isFromMCMSS === 'Yes' &&
+               formData.mastersOrPhd;
+        if (formData.mastersOrPhd === 'Yes') {
+          return baseValid && formData.researchStudent && formData.supervisorName && formData.supervisorSignature;
+        }
+        return baseValid;
       case 3:
         return formData.researchType.length > 0 && formData.dataCollectionType;
       case 4:
@@ -271,13 +279,34 @@ function SubmissionForm({ user }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const getFileName = (file) => file?.name || file?._fileMeta?.name || 'File';
+
+  // Sanitize formData for JSON serialization (File objects cannot be stringified)
+  const sanitizeFormData = (data) => {
+    if (!data) return data;
+    if (data instanceof File) {
+      return { _fileMeta: { name: data.name, size: data.size, type: data.type } };
+    }
+    if (Array.isArray(data)) {
+      return data.map(sanitizeFormData);
+    }
+    if (typeof data === 'object' && data !== null) {
+      const out = {};
+      for (const [k, v] of Object.entries(data)) {
+        out[k] = sanitizeFormData(v);
+      }
+      return out;
+    }
+    return data;
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const submissionData = {
         researchTitle: formData.researchTitle,
-        principalInvestigator: formData.principalInvestigator.fullName,
-        formData: formData,
+        principalInvestigator: formData.principalInvestigator?.fullName || formData.principalInvestigator || '',
+        formData: sanitizeFormData(formData),
         status: 'draft'
       };
 
@@ -308,8 +337,8 @@ function SubmissionForm({ user }) {
       const startTime = Date.now();
       const submissionData = {
         researchTitle: formData.researchTitle,
-        principalInvestigator: formData.principalInvestigator.fullName,
-        formData: formData,
+        principalInvestigator: formData.principalInvestigator?.fullName || formData.principalInvestigator || '',
+        formData: sanitizeFormData(formData),
         status: 'under_review'
       };
 
@@ -481,15 +510,35 @@ function SubmissionForm({ user }) {
               />
             </div>
             <div className="form-group">
-              <label htmlFor="piTelephone">Telephone <span className="required">*</span></label>
-              <input
-                type="tel"
-                id="piTelephone"
-                className="form-control"
-                value={formData.principalInvestigator.telephone}
-                onChange={(e) => handleChange('principalInvestigator.telephone', e.target.value)}
-                disabled={isDisabled}
-              />
+              <label htmlFor="piTelephone">Mobile <span className="required">*</span></label>
+              <div className="phone-input-group">
+                <span className="phone-prefix">+968</span>
+                <input
+                  type="tel"
+                  id="piTelephone"
+                  className="form-control"
+                  placeholder="9XXXXXXX"
+                  maxLength={8}
+                  value={formData.principalInvestigator.telephone?.replace(/^\+968/, '') || ''}
+                  onChange={(e) => {
+                    let raw = e.target.value.replace(/\D/g, '');
+                    if (raw.startsWith('968')) raw = raw.slice(3);
+                    if (raw === '' || (raw.startsWith('9') && raw.length <= 8)) {
+                      const value = raw ? `+968${raw}` : '';
+                      handleChange('principalInvestigator.telephone', value);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+                    const raw = e.target.value.replace(/\D/g, '');
+                    if (!/\d/.test(e.key)) e.preventDefault();
+                    else if (raw.length >= 8) e.preventDefault();
+                    else if (raw.length === 0 && e.key !== '9') e.preventDefault();
+                  }}
+                  disabled={isDisabled}
+                />
+              </div>
+              <small className="form-text text-muted">Omani mobile only (8 digits, starts with 9)</small>
             </div>
             <div className="form-group">
               <label htmlFor="piEmail">Email <span className="required">*</span></label>
@@ -507,7 +556,7 @@ function SubmissionForm({ user }) {
             <div className="form-group">
               <label>How many Co-Investigators are there in the project? <span className="required">*</span></label>
               <div className="radio-group">
-                {['0', '1', '2', '3', '4', '5 or more'].map((count) => (
+                {['1', '2', '3', '4', '5 or more'].map((count) => (
                   <div key={count} className="radio-item">
                     <input
                       type="radio"
@@ -606,6 +655,47 @@ function SubmissionForm({ user }) {
                 </div>
               </div>
             </div>
+
+            {formData.mastersOrPhd === 'Yes' && (
+              <div className="award-details-section">
+                <h3 style={{ marginTop: '2rem' }}>Award details</h3>
+                <div className="form-group">
+                  <label htmlFor="researchStudent">1- Research student (Masters/PhD) <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="researchStudent"
+                    className="form-control"
+                    value={formData.researchStudent}
+                    onChange={(e) => handleChange('researchStudent', e.target.value)}
+                    placeholder="e.g. Masters or PhD"
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="supervisorName">2- Supervisor's name <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="supervisorName"
+                    className="form-control"
+                    value={formData.supervisorName}
+                    onChange={(e) => handleChange('supervisorName', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="supervisorSignature">Supervisor's signature <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="supervisorSignature"
+                    className="form-control"
+                    value={formData.supervisorSignature}
+                    onChange={(e) => handleChange('supervisorSignature', e.target.value)}
+                    placeholder="Enter supervisor's signature"
+                    disabled={isDisabled}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -697,7 +787,7 @@ function SubmissionForm({ user }) {
                 <div className="file-list">
                   {formData.informationSheetFiles.map((file, index) => (
                     <div key={index} className="file-item">
-                      <span>{file.name}</span>
+                      <span>{getFileName(file)}</span>
                       <button type="button" onClick={() => removeFile('informationSheetFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                     </div>
                   ))}
@@ -735,7 +825,7 @@ function SubmissionForm({ user }) {
                 <div className="file-list">
                   {formData.consentFormFiles.map((file, index) => (
                     <div key={index} className="file-item">
-                      <span>{file.name}</span>
+                      <span>{getFileName(file)}</span>
                       <button type="button" onClick={() => removeFile('consentFormFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                     </div>
                   ))}
@@ -924,7 +1014,7 @@ function SubmissionForm({ user }) {
                     <div className="file-list">
                       {formData.grantDocuments.map((file, index) => (
                         <div key={index} className="file-item">
-                          <span>{file.name}</span>
+                          <span>{getFileName(file)}</span>
                           <button type="button" onClick={() => removeFile('grantDocuments', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                         </div>
                       ))}
@@ -1213,7 +1303,7 @@ function SubmissionForm({ user }) {
                 <div className="file-list">
                   {formData.sampleSizeFiles.map((file, index) => (
                     <div key={index} className="file-item">
-                      <span>{file.name}</span>
+                      <span>{getFileName(file)}</span>
                       <button type="button" onClick={() => removeFile('sampleSizeFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                     </div>
                   ))}
@@ -1258,7 +1348,7 @@ function SubmissionForm({ user }) {
                 <div className="file-list">
                   {formData.dataVariablesFiles.map((file, index) => (
                     <div key={index} className="file-item">
-                      <span>{file.name}</span>
+                      <span>{getFileName(file)}</span>
                       <button type="button" onClick={() => removeFile('dataVariablesFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                     </div>
                   ))}
@@ -1303,7 +1393,7 @@ function SubmissionForm({ user }) {
                 <div className="file-list">
                   {formData.researchProposalFiles.map((file, index) => (
                     <div key={index} className="file-item">
-                      <span>{file.name}</span>
+                      <span>{getFileName(file)}</span>
                       <button type="button" onClick={() => removeFile('researchProposalFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
                     </div>
                   ))}

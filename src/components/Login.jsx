@@ -203,46 +203,60 @@ function Login({ onLogin }) {
 
               <div className="form-group">
                 <label htmlFor="signup-password">Password</label>
-                <input
-                  type={showSignupPassword ? 'text' : 'password'}
-                  id="signup-password"
-                  className="form-control"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Enter your password (min. 6 characters)"
-                  minLength={6}
-                />
-                <label className="password-toggle">
+                <div className="password-input-wrap">
                   <input
-                    type="checkbox"
-                    checked={showSignupPassword}
-                    onChange={(e) => setShowSignupPassword(e.target.checked)}
+                    type={showSignupPassword ? 'text' : 'password'}
+                    id="signup-password"
+                    className="form-control"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="Enter your password (min. 6 characters)"
+                    minLength={6}
                   />
-                  <span>Show password</span>
-                </label>
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowSignupPassword(!showSignupPassword)}
+                    aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showSignupPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
                 <label htmlFor="confirm-password">Confirm Password</label>
-                <input
-                  type={showSignupConfirm ? 'text' : 'password'}
-                  id="confirm-password"
-                  className="form-control"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  placeholder="Confirm your password"
-                  minLength={6}
-                />
-                <label className="password-toggle">
+                <div className="password-input-wrap">
                   <input
-                    type="checkbox"
-                    checked={showSignupConfirm}
-                    onChange={(e) => setShowSignupConfirm(e.target.checked)}
+                    type={showSignupConfirm ? 'text' : 'password'}
+                    id="confirm-password"
+                    className="form-control"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirm your password"
+                    minLength={6}
                   />
-                  <span>Show password</span>
-                </label>
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowSignupConfirm(!showSignupConfirm)}
+                    aria-label={showSignupConfirm ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showSignupConfirm ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
@@ -339,24 +353,31 @@ function Login({ onLogin }) {
 
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                className="form-control"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-              />
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  className="form-control"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
               <div className="password-row">
-                <label className="password-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showPassword}
-                    onChange={(e) => setShowPassword(e.target.checked)}
-                  />
-                  <span>Show password</span>
-                </label>
                 <Link to="/forgot-password" className="link-button" style={{ fontSize: '0.85rem' }}>
                   Forgot password?
                 </Link>
