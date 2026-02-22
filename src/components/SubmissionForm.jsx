@@ -1,0 +1,1494 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { createSubmission, updateSubmission, getSubmission, submitForReview } from '../utils/api';
+import './SubmissionForm.css';
+
+const STEPS = [
+  { id: 1, title: 'Terms & Conditions', section: 'section1' },
+  { id: 2, title: 'Researcher Details', section: 'section2' },
+  { id: 3, title: 'Project Description', section: 'section3' },
+  { id: 4, title: 'Confidential Information', section: 'section4' },
+  { id: 5, title: 'Ethical Considerations', section: 'section5' },
+  { id: 6, title: 'Declaration', section: 'section6' },
+  { id: 7, title: 'Research Proposal', section: 'section7' },
+];
+
+const RESEARCH_TYPES = [
+  'Epidemiological Study',
+  'Medical records',
+  'Surgical Procedures',
+  'Medical Imaging',
+  'Social & Psychological',
+  'Pharmaceutical',
+  'Nutrition',
+  'Biological Samples',
+  'Medical Devices',
+  'Other'
+];
+
+const FUNDING_SOURCES = [
+  'Self-Funding',
+  'MCMSS research grant',
+  'MOH grant',
+  'SQU research grant',
+  'TRC research grant',
+  'Industry',
+  'Other'
+];
+
+function SubmissionForm({ user }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('');
+  const [showMCMSSModal, setShowMCMSSModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessView, setShowSuccessView] = useState(false);
+  const [formData, setFormData] = useState({
+    researchTitle: '',
+    consentAcknowledged: false,
+    principalInvestigator: {
+      fullName: '',
+      jobTitle: '',
+      institution: '',
+      hospital: '',
+      department: '',
+      qualifications: '',
+      telephone: '',
+      email: user?.email || '',
+      isFromMCMSS: ''
+    },
+    coInvestigatorsCount: '0',
+    coInvestigators: [],
+    mastersOrPhd: '',
+    researchType: [],
+    dataCollectionType: '',
+    informationSheet: '',
+    informationSheetFiles: [],
+    consentFormFiles: [],
+    dataCapturingMethods: '',
+    dataStorageMode: '',
+    dataAccess: '',
+    confidentialityMeasures: '',
+    proposedStartDate: '',
+    duration: '',
+    multiCenterResearch: '',
+    fundingSource: '',
+    fundingOther: '',
+    grantSum: '',
+    grantStartDate: '',
+    grantEndDate: '',
+    grantDocuments: [],
+    previousEthicsApproval: '',
+    collectingPersonalInfo: '',
+    collectingFromOtherSource: '',
+    involvesDeception: '',
+    intendToPublish: '',
+    bloodTissueSamples: '',
+    piName: '',
+    piSignature: '',
+    declarationDate: '',
+    introduction: '',
+    objectives: '',
+    targetPopulation: '',
+    methodology: '',
+    sampleSizeFiles: [],
+    statisticalAnalysis: '',
+    intervention: '',
+    dataVariablesFiles: [],
+    expectedOutcomes: '',
+    references: '',
+    researchProposalFiles: []
+  });
+
+  useEffect(() => {
+    if (id) {
+      loadSubmission();
+    } else {
+      // Load auto-saved data from localStorage for new submissions
+      const autoSaved = localStorage.getItem('submissionFormAutoSave');
+      if (autoSaved) {
+        try {
+          const savedData = JSON.parse(autoSaved);
+          setFormData(savedData);
+        } catch (error) {
+          console.error('Failed to load auto-saved data:', error);
+        }
+      }
+    }
+  }, [id]);
+
+  // Auto-save to localStorage with debouncing
+  useEffect(() => {
+    if (!id) { // Only auto-save for new submissions
+      setAutoSaveStatus('Saving...');
+      const timeoutId = setTimeout(() => {
+        localStorage.setItem('submissionFormAutoSave', JSON.stringify(formData));
+        setAutoSaveStatus('Auto-saved');
+        setTimeout(() => setAutoSaveStatus(''), 2000);
+      }, 1000); // Debounce: save 1 second after last change
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData, id]);
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentStep]);
+
+  // Clear auto-save when form is submitted
+  const clearAutoSave = () => {
+    localStorage.removeItem('submissionFormAutoSave');
+  };
+
+  const loadSubmission = async () => {
+    try {
+      const submission = await getSubmission(id);
+      if (submission.formData) {
+        setFormData(submission.formData);
+      }
+    } catch (error) {
+      console.error('Failed to load submission:', error);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent],
+          [child]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const handleCheckboxChange = (field, value, checked) => {
+    if (field === 'researchType') {
+      setFormData(prev => ({
+        ...prev,
+        researchType: checked
+          ? [...prev.researchType, value]
+          : prev.researchType.filter(t => t !== value)
+      }));
+    }
+  };
+
+  const handleFileChange = (field, files) => {
+    const fileArray = Array.from(files);
+    setFormData(prev => ({
+      ...prev,
+      [field]: [...(prev[field] || []), ...fileArray]
+    }));
+  };
+
+  const removeFile = (field, index) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: prev[field].filter((_, i) => i !== index)
+    }));
+  };
+
+  const addCoInvestigator = () => {
+    setFormData(prev => ({
+      ...prev,
+      coInvestigators: [...prev.coInvestigators, { name: '', post: '', institute: '' }]
+    }));
+  };
+
+  const updateCoInvestigator = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      coInvestigators: prev.coInvestigators.map((ci, i) =>
+        i === index ? { ...ci, [field]: value } : ci
+      )
+    }));
+  };
+
+  const validateStep = (step) => {
+    switch (step) {
+      case 1:
+        return formData.researchTitle && formData.consentAcknowledged;
+      case 2:
+        const pi = formData.principalInvestigator;
+        return pi.fullName && pi.jobTitle && pi.hospital && pi.department && 
+               pi.qualifications && pi.telephone && pi.email && pi.isFromMCMSS === 'Yes';
+      case 3:
+        return formData.researchType.length > 0 && formData.dataCollectionType;
+      case 4:
+        return formData.dataCapturingMethods && formData.dataStorageMode && 
+               formData.dataAccess && formData.confidentialityMeasures &&
+               formData.proposedStartDate && formData.duration && formData.multiCenterResearch &&
+               formData.fundingSource;
+      case 5:
+        return formData.previousEthicsApproval && formData.collectingPersonalInfo &&
+               formData.collectingFromOtherSource && formData.involvesDeception &&
+               formData.intendToPublish && formData.bloodTissueSamples;
+      case 6:
+        return formData.piName && formData.piSignature && formData.declarationDate;
+      case 7:
+        return formData.introduction && formData.objectives && formData.targetPopulation &&
+               formData.methodology && formData.statisticalAnalysis && formData.intervention &&
+               formData.expectedOutcomes && formData.references;
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (currentStep === 2 && formData.principalInvestigator.isFromMCMSS === 'No') {
+      setShowMCMSSModal(true);
+      return;
+    }
+    if (validateStep(currentStep)) {
+      setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      alert('Please fill in all required fields before proceeding.');
+    }
+  };
+
+  const handleBack = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleStepClick = (stepId) => {
+    // If trying to go to step 2 and MCMSS is No, show modal
+    if (stepId === 2 && formData.principalInvestigator.isFromMCMSS === 'No') {
+      setShowMCMSSModal(true);
+      return;
+    }
+    // Allow navigation to any step
+    setCurrentStep(stepId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const submissionData = {
+        researchTitle: formData.researchTitle,
+        principalInvestigator: formData.principalInvestigator.fullName,
+        formData: formData,
+        status: 'draft'
+      };
+
+      if (id) {
+        await updateSubmission(id, submissionData);
+      } else {
+        const newSubmission = await createSubmission(submissionData);
+        clearAutoSave(); // Clear auto-save when manually saved
+        navigate(`/submission/${newSubmission._id || newSubmission.id}/edit`);
+      }
+      alert('Draft saved successfully!');
+    } catch (error) {
+      alert('Failed to save draft. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    // Show confirmation modal instead of browser popup
+    setShowConfirmModal(true);
+  };
+
+  const confirmSubmit = async () => {
+    setShowConfirmModal(false);
+    setLoading(true);
+    try {
+      const startTime = Date.now();
+      const submissionData = {
+        researchTitle: formData.researchTitle,
+        principalInvestigator: formData.principalInvestigator.fullName,
+        formData: formData,
+        status: 'under_review'
+      };
+
+      if (id) {
+        await submitForReview(id);
+      } else {
+        const newSubmission = await createSubmission(submissionData);
+        await submitForReview(newSubmission._id || newSubmission.id);
+      }
+      
+      // Ensure minimum loading time of 1.8 seconds
+      const elapsed = Date.now() - startTime;
+      const remainingTime = Math.max(0, 1800 - elapsed);
+      await new Promise(resolve => setTimeout(resolve, remainingTime));
+      
+      clearAutoSave(); // Clear auto-save when submitted
+      setLoading(false);
+      setShowSuccessView(true);
+    } catch (error) {
+      alert('Failed to submit. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="step-content">
+            <h3>Terms and Conditions for Approval of Data Protection</h3>
+            <div className="terms-box">
+              <ol>
+                <li>Personal data shall only be collected and processed for the specific research purpose.</li>
+                <li>The data shall be adequate, relevant and not exclusive in relation to the processing purpose.</li>
+                <li>All reasonable measures shall be taken to ensure the correctness of personal data.</li>
+                <li>Personal data shall not be disclosed to third parties. All necessary measures shall be implemented to ensure confidentiality and where possible, data shall be anonymous.</li>
+                <li>Unless otherwise authorized by the MCMSS research committee, the researcher shall obtain the consent from the data subject and provide the subject with the following information: the researcher's identity, the purpose of processing and the recipients to whom personal data may be disclosed. The data subject shall also be informed about his/her rights, rectify, and where applicable erase his/her data.</li>
+                <li>The data collected will be securely stored in such a way that only those mentioned below will be able to gain access to it. Data obtained as a result of the research will be retained for at least 5 years in secure storage. Any personal information held on the participants (such as contact details, audio or video tapes, after they have been transcribed etc.,) may be destroyed at the completion of the research even though the data derived from the research will, in most cases, be kept for much longer or possibly indefinitely.</li>
+                <li><strong>The Principle Investigator should be from the MCMSS.</strong></li>
+              </ol>
+            </div>
+            <div className="form-group">
+              <div className="checkbox-item">
+                <input
+                  type="checkbox"
+                  id="consent"
+                  checked={formData.consentAcknowledged}
+                  onChange={(e) => handleChange('consentAcknowledged', e.target.checked)}
+                />
+                <label htmlFor="consent">
+                  I acknowledge that I have read the above text and agree to what is stated. <span className="required">*</span>
+                </label>
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="researchTitle">
+                Research Title <span className="required">*</span>
+              </label>
+              <input
+                type="text"
+                id="researchTitle"
+                className="form-control"
+                value={formData.researchTitle}
+                onChange={(e) => handleChange('researchTitle', e.target.value)}
+                placeholder="Enter the title of your research"
+              />
+            </div>
+          </div>
+        );
+
+      case 2:
+        const isDisabled = formData.principalInvestigator.isFromMCMSS === 'No';
+        return (
+          <div className="step-content">
+            <h3>Details of Principal Investigator</h3>
+            <div className="form-group">
+              <label htmlFor="piFullName">Full Name <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piFullName"
+                className="form-control"
+                value={formData.principalInvestigator.fullName}
+                onChange={(e) => handleChange('principalInvestigator.fullName', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="piJobTitle">Job Title / Academic Title <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piJobTitle"
+                className="form-control"
+                value={formData.principalInvestigator.jobTitle}
+                onChange={(e) => handleChange('principalInvestigator.jobTitle', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+            <div className="form-group">
+              <label>Is the Principal Investigator from MCMSS? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="isFromMCMSSYes"
+                    name="isFromMCMSS"
+                    value="Yes"
+                    checked={formData.principalInvestigator.isFromMCMSS === 'Yes'}
+                    onChange={(e) => {
+                      handleChange('principalInvestigator.isFromMCMSS', e.target.value);
+                    }}
+                  />
+                  <label htmlFor="isFromMCMSSYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="isFromMCMSSNo"
+                    name="isFromMCMSS"
+                    value="No"
+                    checked={formData.principalInvestigator.isFromMCMSS === 'No'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleChange('principalInvestigator.isFromMCMSS', value);
+                      if (value === 'No') {
+                        setShowMCMSSModal(true);
+                      }
+                    }}
+                  />
+                  <label htmlFor="isFromMCMSSNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="piHospital">Hospital <span className="required">*</span></label>
+              <select
+                id="piHospital"
+                className="form-control"
+                value={formData.principalInvestigator.hospital}
+                onChange={(e) => handleChange('principalInvestigator.hospital', e.target.value)}
+                disabled={isDisabled}
+              >
+                <option value="">Select Hospital</option>
+                <option value="Al Qurum">Al Qurum</option>
+                <option value="Al Khoudh">Al Khoudh</option>
+                <option value="Muscat">Muscat</option>
+                <option value="Salalah">Salalah</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="piDepartment">Department <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piDepartment"
+                className="form-control"
+                value={formData.principalInvestigator.department}
+                onChange={(e) => handleChange('principalInvestigator.department', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="piQualifications">Qualifications <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piQualifications"
+                className="form-control"
+                value={formData.principalInvestigator.qualifications}
+                onChange={(e) => handleChange('principalInvestigator.qualifications', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="piTelephone">Telephone <span className="required">*</span></label>
+              <input
+                type="tel"
+                id="piTelephone"
+                className="form-control"
+                value={formData.principalInvestigator.telephone}
+                onChange={(e) => handleChange('principalInvestigator.telephone', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="piEmail">Email <span className="required">*</span></label>
+              <input
+                type="email"
+                id="piEmail"
+                className="form-control"
+                value={formData.principalInvestigator.email}
+                onChange={(e) => handleChange('principalInvestigator.email', e.target.value)}
+                disabled={isDisabled}
+              />
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Co-Investigators</h3>
+            <div className="form-group">
+              <label>How many Co-Investigators are there in the project? <span className="required">*</span></label>
+              <div className="radio-group">
+                {['0', '1', '2', '3', '4', '5 or more'].map((count) => (
+                  <div key={count} className="radio-item">
+                    <input
+                      type="radio"
+                      id={`coCount${count}`}
+                      name="coInvestigatorsCount"
+                      value={count}
+                      checked={formData.coInvestigatorsCount === count}
+                      onChange={(e) => {
+                        handleChange('coInvestigatorsCount', e.target.value);
+                        const num = count === '5 or more' ? 5 : parseInt(count);
+                        if (num > formData.coInvestigators.length) {
+                          const newCoInvestigators = Array(num - formData.coInvestigators.length)
+                            .fill(null)
+                            .map(() => ({ name: '', post: '', institute: '' }));
+                          setFormData(prev => ({
+                            ...prev,
+                            coInvestigators: [...prev.coInvestigators, ...newCoInvestigators]
+                          }));
+                        } else if (num < formData.coInvestigators.length) {
+                          setFormData(prev => ({
+                            ...prev,
+                            coInvestigators: prev.coInvestigators.slice(0, num)
+                          }));
+                        }
+                      }}
+                      disabled={isDisabled}
+                    />
+                    <label htmlFor={`coCount${count}`} style={{ opacity: isDisabled ? 0.5 : 1 }}>{count}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {formData.coInvestigators.map((coInv, index) => (
+              <div key={index} className="co-investigator-section" style={{ opacity: isDisabled ? 0.6 : 1 }}>
+                <h4>Co-Investigator {index + 1}</h4>
+                <div className="form-group">
+                  <label>Name <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={coInv.name}
+                    onChange={(e) => updateCoInvestigator(index, 'name', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Professional Post</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={coInv.post}
+                    onChange={(e) => updateCoInvestigator(index, 'post', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Institute & Department</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={coInv.institute}
+                    onChange={(e) => updateCoInvestigator(index, 'institute', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <div className="form-group">
+              <label>Is this research being submitted for Masters or PhD award? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="mastersYes"
+                    name="mastersOrPhd"
+                    value="Yes"
+                    checked={formData.mastersOrPhd === 'Yes'}
+                    onChange={(e) => handleChange('mastersOrPhd', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                  <label htmlFor="mastersYes" style={{ opacity: isDisabled ? 0.5 : 1 }}>Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="mastersNo"
+                    name="mastersOrPhd"
+                    value="No"
+                    checked={formData.mastersOrPhd === 'No'}
+                    onChange={(e) => handleChange('mastersOrPhd', e.target.value)}
+                    disabled={isDisabled}
+                  />
+                  <label htmlFor="mastersNo" style={{ opacity: isDisabled ? 0.5 : 1 }}>No</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="step-content">
+            <h3>Project Description</h3>
+            <div className="form-group">
+              <label>Research Type <span className="required">*</span></label>
+              <div className="checkbox-multi">
+                {RESEARCH_TYPES.map((type) => (
+                  <div key={type} className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      id={`researchType${type}`}
+                      checked={formData.researchType.includes(type)}
+                      onChange={(e) => handleCheckboxChange('researchType', type, e.target.checked)}
+                    />
+                    <label htmlFor={`researchType${type}`}>{type}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Type of Data Collection <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="prospective"
+                    name="dataCollectionType"
+                    value="Prospective"
+                    checked={formData.dataCollectionType === 'Prospective'}
+                    onChange={(e) => handleChange('dataCollectionType', e.target.value)}
+                  />
+                  <label htmlFor="prospective">Prospective</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="retrospective"
+                    name="dataCollectionType"
+                    value="Retrospective"
+                    checked={formData.dataCollectionType === 'Retrospective'}
+                    onChange={(e) => handleChange('dataCollectionType', e.target.value)}
+                  />
+                  <label htmlFor="retrospective">Retrospective</label>
+                </div>
+              </div>
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Information Sheet Requirements</h3>
+            <div className="info-box">
+              <p>Information sheet is a clear and concise document that will be given to potential participants explaining the details of the study so that they can make an informed decision about participating.</p>
+              <p>At a minimum, the Information Sheet must describe in lay terms:</p>
+              <ul>
+                <li>the nature and purpose of the research;</li>
+                <li>the procedures involved and how long it will take;</li>
+                <li>any risk or discomfort involved;</li>
+                <li>who will have access and under what conditions to any personal information;</li>
+                <li>the eventual disposal of data collected;</li>
+                <li>the name and contact details of the staff member responsible for the project and an invitation to contact them over any matter associated with the project.</li>
+              </ul>
+              <p><strong>The Information Sheet must conclude with the statement:</strong> "The Medical City for Military and Security Services Research and Studies Committee has reviewed and approved this project."</p>
+            </div>
+            <div className="form-group">
+              <label htmlFor="informationSheet">Information Sheet Content</label>
+              <textarea
+                id="informationSheet"
+                className="form-control"
+                value={formData.informationSheet}
+                onChange={(e) => handleChange('informationSheet', e.target.value)}
+                placeholder="Enter information sheet content or description"
+              />
+            </div>
+            <div className="form-group">
+              <label>Upload Information Sheet <span className="required">*</span></label>
+              <div className="file-upload">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => handleFileChange('informationSheetFiles', e.target.files)}
+                />
+                <p>Click to upload or drag and drop</p>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
+              </div>
+              {formData.informationSheetFiles.length > 0 && (
+                <div className="file-list">
+                  {formData.informationSheetFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => removeFile('informationSheetFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Consent Form Requirements</h3>
+            <div className="info-box">
+              <p>The Consent Form must make it clear that a participant:</p>
+              <ol>
+                <li>understands the nature of the proposal;</li>
+                <li>has had all questions satisfactorily answered;</li>
+                <li>is aware of what will become of the data (including video or audio tapes and data held electronically) at the conclusion of the project;</li>
+                <li>knows that he or she is free to withdraw from the project at any time without disadvantage;</li>
+                <li>is aware of risks, remuneration and compensation;</li>
+                <li>is aware that the data may be published;</li>
+                <li>is aware that a third party (i.e. transcriber) may have access to the data;</li>
+                <li>is aware that every effort will be made to preserve the anonymity of the participant gives an express waiver, which must be in addition to and separate from this consent form.</li>
+              </ol>
+            </div>
+            <div className="form-group">
+              <label>Upload Consent Form(s) in Arabic and English</label>
+              <div className="file-upload">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => handleFileChange('consentFormFiles', e.target.files)}
+                />
+                <p>Click to upload or drag and drop</p>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
+              </div>
+              {formData.consentFormFiles.length > 0 && (
+                <div className="file-list">
+                  {formData.consentFormFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => removeFile('consentFormFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="step-content">
+            <h3>Handling of Confidential Information</h3>
+            <div className="form-group">
+              <label htmlFor="dataCapturingMethods">
+                What form of data capturing method(s) used in your research? (e.g. typewritten records, audiotapes, videotapes, machine generated reports etc.) <span className="required">*</span>
+              </label>
+              <textarea
+                id="dataCapturingMethods"
+                className="form-control"
+                value={formData.dataCapturingMethods}
+                onChange={(e) => handleChange('dataCapturingMethods', e.target.value)}
+                placeholder="Describe the data capturing methods used"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="dataStorageMode">Mode of data Storage <span className="required">*</span></label>
+              <textarea
+                id="dataStorageMode"
+                className="form-control"
+                value={formData.dataStorageMode}
+                onChange={(e) => handleChange('dataStorageMode', e.target.value)}
+                placeholder="Describe how data will be stored"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="dataAccess">Who will have access to data? <span className="required">*</span></label>
+              <textarea
+                id="dataAccess"
+                className="form-control"
+                value={formData.dataAccess}
+                onChange={(e) => handleChange('dataAccess', e.target.value)}
+                placeholder="List who will have access to the data"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confidentialityMeasures">How do you secure subjects confidentiality for this method? <span className="required">*</span></label>
+              <textarea
+                id="confidentialityMeasures"
+                className="form-control"
+                value={formData.confidentialityMeasures}
+                onChange={(e) => handleChange('confidentialityMeasures', e.target.value)}
+                placeholder="Describe confidentiality measures"
+              />
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Project Details</h3>
+            <div className="form-group">
+              <label htmlFor="proposedStartDate">Proposed Date Of Commencement <span className="required">*</span></label>
+              <input
+                type="date"
+                id="proposedStartDate"
+                className="form-control"
+                value={formData.proposedStartDate}
+                onChange={(e) => handleChange('proposedStartDate', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="duration">Duration (Months) <span className="required">*</span></label>
+              <input
+                type="number"
+                id="duration"
+                className="form-control"
+                value={formData.duration}
+                onChange={(e) => handleChange('duration', e.target.value)}
+                min="1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Multi-center research? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="multiCenterYes"
+                    name="multiCenterResearch"
+                    value="Yes"
+                    checked={formData.multiCenterResearch === 'Yes'}
+                    onChange={(e) => handleChange('multiCenterResearch', e.target.value)}
+                  />
+                  <label htmlFor="multiCenterYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="multiCenterNo"
+                    name="multiCenterResearch"
+                    value="No"
+                    checked={formData.multiCenterResearch === 'No'}
+                    onChange={(e) => handleChange('multiCenterResearch', e.target.value)}
+                  />
+                  <label htmlFor="multiCenterNo">No</label>
+                </div>
+              </div>
+            </div>
+
+            <h3 style={{ marginTop: '2rem' }}>Details of Funding Source</h3>
+            <div className="form-group">
+              <label>Funding Source <span className="required">*</span></label>
+              <div className="radio-group">
+                {FUNDING_SOURCES.map((source) => (
+                  <div key={source} className="radio-item">
+                    <input
+                      type="radio"
+                      id={`funding${source}`}
+                      name="fundingSource"
+                      value={source}
+                      checked={formData.fundingSource === source}
+                      onChange={(e) => handleChange('fundingSource', e.target.value)}
+                    />
+                    <label htmlFor={`funding${source}`}>{source}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {formData.fundingSource === 'Other' && (
+              <div className="form-group">
+                <label htmlFor="fundingOther">Please specify <span className="required">*</span></label>
+                <input
+                  type="text"
+                  id="fundingOther"
+                  className="form-control"
+                  value={formData.fundingOther}
+                  onChange={(e) => handleChange('fundingOther', e.target.value)}
+                />
+              </div>
+            )}
+
+            {formData.fundingSource && formData.fundingSource !== 'Self-Funding' && (
+              <>
+                <h3 style={{ marginTop: '2rem' }}>Grant Details</h3>
+                <div className="form-group">
+                  <label htmlFor="grantSum">Grant Sum <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="grantSum"
+                    className="form-control"
+                    value={formData.grantSum}
+                    onChange={(e) => handleChange('grantSum', e.target.value)}
+                    placeholder="Enter grant amount"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="grantStartDate">Grant Start Date <span className="required">*</span></label>
+                  <input
+                    type="date"
+                    id="grantStartDate"
+                    className="form-control"
+                    value={formData.grantStartDate}
+                    onChange={(e) => handleChange('grantStartDate', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="grantEndDate">Grant End Date <span className="required">*</span></label>
+                  <input
+                    type="date"
+                    id="grantEndDate"
+                    className="form-control"
+                    value={formData.grantEndDate}
+                    onChange={(e) => handleChange('grantEndDate', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Upload Grant Documents <span className="required">*</span></label>
+                  <div className="file-upload">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => handleFileChange('grantDocuments', e.target.files)}
+                    />
+                    <p>Click to upload or drag and drop</p>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>Max 1 GB per file</p>
+                  </div>
+                  {formData.grantDocuments.length > 0 && (
+                    <div className="file-list">
+                      {formData.grantDocuments.map((file, index) => (
+                        <div key={index} className="file-item">
+                          <span>{file.name}</span>
+                          <button type="button" onClick={() => removeFile('grantDocuments', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="step-content">
+            <h3>Ethical Considerations</h3>
+            <div className="form-group">
+              <label>Have you applied for ethics approval for this research project before? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="previousEthicsYes"
+                    name="previousEthicsApproval"
+                    value="Yes"
+                    checked={formData.previousEthicsApproval === 'Yes'}
+                    onChange={(e) => handleChange('previousEthicsApproval', e.target.value)}
+                  />
+                  <label htmlFor="previousEthicsYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="previousEthicsNo"
+                    name="previousEthicsApproval"
+                    value="No"
+                    checked={formData.previousEthicsApproval === 'No'}
+                    onChange={(e) => handleChange('previousEthicsApproval', e.target.value)}
+                  />
+                  <label htmlFor="previousEthicsNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Are you collecting and storing personal information directly from the individual concerned that could identify the individual? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="collectingPersonalYes"
+                    name="collectingPersonalInfo"
+                    value="Yes"
+                    checked={formData.collectingPersonalInfo === 'Yes'}
+                    onChange={(e) => handleChange('collectingPersonalInfo', e.target.value)}
+                  />
+                  <label htmlFor="collectingPersonalYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="collectingPersonalNo"
+                    name="collectingPersonalInfo"
+                    value="No"
+                    checked={formData.collectingPersonalInfo === 'No'}
+                    onChange={(e) => handleChange('collectingPersonalInfo', e.target.value)}
+                  />
+                  <label htmlFor="collectingPersonalNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Are you collecting information about individuals from another source? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="collectingOtherYes"
+                    name="collectingFromOtherSource"
+                    value="Yes"
+                    checked={formData.collectingFromOtherSource === 'Yes'}
+                    onChange={(e) => handleChange('collectingFromOtherSource', e.target.value)}
+                  />
+                  <label htmlFor="collectingOtherYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="collectingOtherNo"
+                    name="collectingFromOtherSource"
+                    value="No"
+                    checked={formData.collectingFromOtherSource === 'No'}
+                    onChange={(e) => handleChange('collectingFromOtherSource', e.target.value)}
+                  />
+                  <label htmlFor="collectingOtherNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Does the research involve any form of deception? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="deceptionYes"
+                    name="involvesDeception"
+                    value="Yes"
+                    checked={formData.involvesDeception === 'Yes'}
+                    onChange={(e) => handleChange('involvesDeception', e.target.value)}
+                  />
+                  <label htmlFor="deceptionYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="deceptionNo"
+                    name="involvesDeception"
+                    value="No"
+                    checked={formData.involvesDeception === 'No'}
+                    onChange={(e) => handleChange('involvesDeception', e.target.value)}
+                  />
+                  <label htmlFor="deceptionNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Do you intend to publish or disseminate the findings? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="publishYes"
+                    name="intendToPublish"
+                    value="Yes"
+                    checked={formData.intendToPublish === 'Yes'}
+                    onChange={(e) => handleChange('intendToPublish', e.target.value)}
+                  />
+                  <label htmlFor="publishYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="publishNo"
+                    name="intendToPublish"
+                    value="No"
+                    checked={formData.intendToPublish === 'No'}
+                    onChange={(e) => handleChange('intendToPublish', e.target.value)}
+                  />
+                  <label htmlFor="publishNo">No</label>
+                </div>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Are blood and/or tissue samples used for analysis? <span className="required">*</span></label>
+              <div className="radio-group">
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="bloodTissueYes"
+                    name="bloodTissueSamples"
+                    value="Yes"
+                    checked={formData.bloodTissueSamples === 'Yes'}
+                    onChange={(e) => handleChange('bloodTissueSamples', e.target.value)}
+                  />
+                  <label htmlFor="bloodTissueYes">Yes</label>
+                </div>
+                <div className="radio-item">
+                  <input
+                    type="radio"
+                    id="bloodTissueNo"
+                    name="bloodTissueSamples"
+                    value="No"
+                    checked={formData.bloodTissueSamples === 'No'}
+                    onChange={(e) => handleChange('bloodTissueSamples', e.target.value)}
+                  />
+                  <label htmlFor="bloodTissueNo">No</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="step-content">
+            <h3>Declaration of Investigator</h3>
+            <div className="info-box">
+              <p>I (we) certify to the best of my (our) knowledge, the information given in this application is correct and the details of this application are true representation of the research to be undertaken. I (we) agree to inform the MCMSS research committee of any variations to the research during the application period or during the conduct of my (our) research.</p>
+              <p>I (we) will ensure that patient's samples sent abroad will be used only for the research purposes described in the application of ethics committee approval.</p>
+            </div>
+            <div className="form-group">
+              <label htmlFor="piName">Name of Principal Investigator (PI) <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piName"
+                className="form-control"
+                value={formData.piName}
+                onChange={(e) => handleChange('piName', e.target.value)}
+                placeholder="Enter full name"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="piSignature">Signature <span className="required">*</span></label>
+              <input
+                type="text"
+                id="piSignature"
+                className="form-control"
+                value={formData.piSignature}
+                onChange={(e) => handleChange('piSignature', e.target.value)}
+                placeholder="Enter your signature"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="declarationDate">Date <span className="required">*</span></label>
+              <input
+                type="date"
+                id="declarationDate"
+                className="form-control"
+                value={formData.declarationDate}
+                onChange={(e) => handleChange('declarationDate', e.target.value)}
+              />
+            </div>
+          </div>
+        );
+
+      case 7:
+        return (
+          <div className="step-content">
+            <h3>Research Proposal</h3>
+            <div className="form-group">
+              <label htmlFor="introduction">Introduction (Max 500 words) <span className="required">*</span></label>
+              <textarea
+                id="introduction"
+                className="form-control"
+                value={formData.introduction}
+                onChange={(e) => handleChange('introduction', e.target.value)}
+                placeholder="Provide an introduction to your research"
+                rows="6"
+              />
+              <small style={{ color: '#6c757d' }}>{formData.introduction.length} / 500 words</small>
+            </div>
+            <div className="form-group">
+              <label htmlFor="objectives">Objectives (Primary & Secondary) <span className="required">*</span></label>
+              <textarea
+                id="objectives"
+                className="form-control"
+                value={formData.objectives}
+                onChange={(e) => handleChange('objectives', e.target.value)}
+                placeholder="List your primary and secondary objectives"
+                rows="4"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="targetPopulation">Target Population <span className="required">*</span></label>
+              <textarea
+                id="targetPopulation"
+                className="form-control"
+                value={formData.targetPopulation}
+                onChange={(e) => handleChange('targetPopulation', e.target.value)}
+                placeholder="Describe your target population"
+                rows="3"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="methodology">Methodology <span className="required">*</span></label>
+              <textarea
+                id="methodology"
+                className="form-control"
+                value={formData.methodology}
+                onChange={(e) => handleChange('methodology', e.target.value)}
+                placeholder="Describe your research methodology"
+                rows="6"
+              />
+            </div>
+            <div className="form-group">
+              <label>Sample Size Calculation <span className="required">*</span></label>
+              <div className="file-upload">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => handleFileChange('sampleSizeFiles', e.target.files)}
+                />
+                <p>Click to upload or drag and drop</p>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
+              </div>
+              {formData.sampleSizeFiles.length > 0 && (
+                <div className="file-list">
+                  {formData.sampleSizeFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => removeFile('sampleSizeFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label htmlFor="statisticalAnalysis">Statistical Analysis <span className="required">*</span></label>
+              <textarea
+                id="statisticalAnalysis"
+                className="form-control"
+                value={formData.statisticalAnalysis}
+                onChange={(e) => handleChange('statisticalAnalysis', e.target.value)}
+                placeholder="Describe your statistical analysis methods"
+                rows="4"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="intervention">Intervention <span className="required">*</span></label>
+              <textarea
+                id="intervention"
+                className="form-control"
+                value={formData.intervention}
+                onChange={(e) => handleChange('intervention', e.target.value)}
+                placeholder="Describe any interventions"
+                rows="4"
+              />
+            </div>
+            <div className="form-group">
+              <label>Data and Research Variables</label>
+              <div className="file-upload">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => handleFileChange('dataVariablesFiles', e.target.files)}
+                />
+                <p>Click to upload or drag and drop</p>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
+              </div>
+              {formData.dataVariablesFiles.length > 0 && (
+                <div className="file-list">
+                  {formData.dataVariablesFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => removeFile('dataVariablesFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label htmlFor="expectedOutcomes">Expected Outcomes <span className="required">*</span></label>
+              <textarea
+                id="expectedOutcomes"
+                className="form-control"
+                value={formData.expectedOutcomes}
+                onChange={(e) => handleChange('expectedOutcomes', e.target.value)}
+                placeholder="Describe expected outcomes"
+                rows="4"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="references">References <span className="required">*</span></label>
+              <textarea
+                id="references"
+                className="form-control"
+                value={formData.references}
+                onChange={(e) => handleChange('references', e.target.value)}
+                placeholder="List your references"
+                rows="6"
+              />
+            </div>
+            <div className="form-group">
+              <label>Upload Research Proposal <span className="required">*</span></label>
+              <div className="file-upload">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => handleFileChange('researchProposalFiles', e.target.files)}
+                />
+                <p>Click to upload or drag and drop</p>
+                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 1 GB per file</p>
+              </div>
+              {formData.researchProposalFiles.length > 0 && (
+                <div className="file-list">
+                  {formData.researchProposalFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => removeFile('researchProposalFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Show success view if submission was successful
+  if (showSuccessView) {
+    return (
+      <div className="submission-success-container">
+        <div className="submission-success-card">
+          <div className="success-icon">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" stroke="#28a745" strokeWidth="2" fill="none"/>
+              <path d="M8 12l2 2 4-4" stroke="#28a745" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h2>Submission Successful!</h2>
+          <p className="success-message">
+            Your research has been submitted for review.
+          </p>
+          <p className="success-submessage">
+            You will be notified once the review process is complete.
+          </p>
+          <button 
+            className="btn btn-primary btn-success-home"
+            onClick={() => navigate('/dashboard')}
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-content">
+          <h1>Research Ethics Submission Form</h1>
+          <button className="btn-logout" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+        </div>
+      </header>
+
+      <div className="container">
+        <div className="card">
+          <div className="step-indicator">
+            {STEPS.map((step) => (
+              <div
+                key={step.id}
+                className={`step ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'completed' : ''}`}
+              >
+                <div 
+                  className="step-number"
+                  onClick={() => handleStepClick(step.id)}
+                  style={{ cursor: 'pointer' }}
+                  title={`Go to ${step.title}`}
+                >
+                  {step.id}
+                </div>
+                <div className="step-label">{step.title}</div>
+              </div>
+            ))}
+          </div>
+
+          {renderStepContent()}
+
+          <div className="form-navigation">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              {currentStep > 1 && (
+                <button type="button" className="btn btn-secondary" onClick={handleBack}>
+                  ← Back
+                </button>
+              )}
+              {!id && autoSaveStatus && (
+                <span style={{ 
+                  fontSize: '0.875rem', 
+                  color: autoSaveStatus === 'Saving...' ? '#8b6700' : '#28a745',
+                  fontStyle: 'italic'
+                }}>
+                  {autoSaveStatus}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save Draft'}
+              </button>
+              {currentStep < STEPS.length ? (
+                <button type="button" className="btn btn-primary" onClick={handleNext}>
+                  Next →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={handleSubmit}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                      <span className="spinner"></span>
+                      Submitting...
+                    </span>
+                  ) : (
+                    'Submit for Review'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MCMSS Requirement Modal */}
+      {showMCMSSModal && (
+        <div className="modal-overlay" onClick={() => setShowMCMSSModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>MCMSS Requirement</h3>
+            <p style={{ fontSize: '1.1rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+              The Principle Investigator should be from the MCMSS.
+            </p>
+            <div className="modal-actions">
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  setShowMCMSSModal(false);
+                  // Reset to empty or keep as No but prevent proceeding
+                  handleChange('principalInvestigator.isFromMCMSS', '');
+                }}
+              >
+                I Understand
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Confirm Submission</h3>
+            <p style={{ fontSize: '1.1rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+              Are you sure you want to submit this form for review?
+            </p>
+            <div className="modal-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={confirmSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    <span className="spinner"></span>
+                    Submitting...
+                  </span>
+                ) : (
+                  'Confirm Submit'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default SubmissionForm;
