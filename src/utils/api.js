@@ -15,6 +15,9 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
@@ -39,6 +42,35 @@ api.interceptors.response.use(
 );
 
 const getData = (res) => (res.data?.data !== undefined ? res.data.data : res.data);
+
+const hasFileObjects = (obj) => {
+  if (obj instanceof File) return true;
+  if (Array.isArray(obj)) return obj.some(hasFileObjects);
+  if (obj && typeof obj === 'object') return Object.values(obj).some(hasFileObjects);
+  return false;
+};
+
+const buildSubmissionFormData = (data) => {
+  const fd = new FormData();
+  fd.append('researchTitle', data.researchTitle || '');
+  fd.append('principalInvestigator', data.principalInvestigator || '');
+  fd.append('status', data.status || 'draft');
+  const formData = data.formData || data;
+  const sanitized = { ...formData };
+  const fileFields = ['informationSheetFiles', 'consentFormFiles', 'grantDocuments', 'sampleSizeFiles', 'dataVariablesFiles', 'researchProposalFiles'];
+  for (const field of fileFields) {
+    if (Array.isArray(sanitized[field])) {
+      const files = sanitized[field].filter((f) => f instanceof File);
+      const existing = sanitized[field].filter((f) => !(f instanceof File));
+      sanitized[field] = existing;
+      for (const file of files) {
+        fd.append(field, file);
+      }
+    }
+  }
+  fd.append('formDataJson', JSON.stringify(sanitized));
+  return fd;
+};
 
 export const login = async (email, password) => {
   const response = await api.post('/auth/login', { email, password });
@@ -108,12 +140,26 @@ export const getSubmission = async (id) => {
 };
 
 export const createSubmission = async (data) => {
-  const response = await api.post('/submissions', data);
+  const payload = typeof data.formData !== 'undefined' ? { ...data, formData: data.formData } : data;
+  const hasFiles = hasFileObjects(payload.formData || payload);
+  if (hasFiles) {
+    const formData = buildSubmissionFormData(payload);
+    const response = await api.post('/submissions', formData);
+    return getData(response);
+  }
+  const response = await api.post('/submissions', payload);
   return getData(response);
 };
 
 export const updateSubmission = async (id, data) => {
-  const response = await api.put(`/submissions/${id}`, data);
+  const payload = typeof data.formData !== 'undefined' ? { ...data, formData: data.formData } : data;
+  const hasFiles = hasFileObjects(payload.formData || payload);
+  if (hasFiles) {
+    const formData = buildSubmissionFormData(payload);
+    const response = await api.put(`/submissions/${id}`, formData);
+    return getData(response);
+  }
+  const response = await api.put(`/submissions/${id}`, payload);
   return getData(response);
 };
 

@@ -69,6 +69,10 @@ function SubmissionForm({ user }) {
     researchType: [],
     dataCollectionType: '',
     informationSheet: '',
+    researcherContactName: '',
+    researcherContactDepartment: '',
+    researcherContactTelephone: '',
+    researcherContactEmail: '',
     informationSheetFiles: [],
     consentFormFiles: [],
     dataCapturingMethods: '',
@@ -128,7 +132,7 @@ function SubmissionForm({ user }) {
     if (!id) { // Only auto-save for new submissions
       setAutoSaveStatus('Saving...');
       const timeoutId = setTimeout(() => {
-        localStorage.setItem('submissionFormAutoSave', JSON.stringify(formData));
+        localStorage.setItem('submissionFormAutoSave', JSON.stringify(sanitizeFormData(formData)));
         setAutoSaveStatus('Auto-saved');
         setTimeout(() => setAutoSaveStatus(''), 2000);
       }, 1000); // Debounce: save 1 second after last change
@@ -186,10 +190,12 @@ function SubmissionForm({ user }) {
 
   const handleFileChange = (field, files) => {
     const fileArray = Array.from(files);
-    setFormData(prev => ({
-      ...prev,
-      [field]: [...(prev[field] || []), ...fileArray]
-    }));
+    const maxFiles = 5;
+    setFormData(prev => {
+      const existing = prev[field] || [];
+      const combined = [...existing, ...fileArray].slice(0, maxFiles);
+      return { ...prev, [field]: combined };
+    });
   };
 
   const removeFile = (field, index) => {
@@ -228,13 +234,27 @@ function SubmissionForm({ user }) {
           return baseValid && formData.researchStudent && formData.supervisorName && formData.supervisorSignature;
         }
         return baseValid;
-      case 3:
-        return formData.researchType.length > 0 && formData.dataCollectionType;
+      case 3: {
+        const base = formData.researchType.length > 0 && formData.dataCollectionType;
+        if (!base) return false;
+        const project = formData.proposedStartDate && formData.duration && formData.multiCenterResearch && formData.fundingSource;
+        if (formData.fundingSource === 'Other') {
+          if (!formData.fundingOther) return false;
+        }
+        if (formData.fundingSource && formData.fundingSource !== 'Self-Funding') {
+          if (!formData.grantSum || !formData.grantStartDate || !formData.grantEndDate || formData.grantDocuments.length === 0) return false;
+        }
+        if (formData.dataCollectionType === 'Prospective') {
+          return project &&
+            formData.researcherContactName && formData.researcherContactDepartment &&
+            formData.researcherContactTelephone && formData.researcherContactEmail &&
+            formData.informationSheetFiles.length > 0 && formData.consentFormFiles.length > 0;
+        }
+        return project;
+      }
       case 4:
         return formData.dataCapturingMethods && formData.dataStorageMode && 
-               formData.dataAccess && formData.confidentialityMeasures &&
-               formData.proposedStartDate && formData.duration && formData.multiCenterResearch &&
-               formData.fundingSource;
+               formData.dataAccess && formData.confidentialityMeasures;
       case 5:
         return formData.previousEthicsApproval && formData.collectingPersonalInfo &&
                formData.collectingFromOtherSource && formData.involvesDeception &&
@@ -279,7 +299,7 @@ function SubmissionForm({ user }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const getFileName = (file) => file?.name || file?._fileMeta?.name || 'File';
+  const getFileName = (file) => file?.name || file?._fileMeta?.name || file?.originalName || 'File';
 
   // Sanitize formData for JSON serialization (File objects cannot be stringified)
   const sanitizeFormData = (data) => {
@@ -306,7 +326,7 @@ function SubmissionForm({ user }) {
       const submissionData = {
         researchTitle: formData.researchTitle,
         principalInvestigator: formData.principalInvestigator?.fullName || formData.principalInvestigator || '',
-        formData: sanitizeFormData(formData),
+        formData: formData,
         status: 'draft'
       };
 
@@ -338,14 +358,14 @@ function SubmissionForm({ user }) {
       const submissionData = {
         researchTitle: formData.researchTitle,
         principalInvestigator: formData.principalInvestigator?.fullName || formData.principalInvestigator || '',
-        formData: sanitizeFormData(formData),
-        status: 'under_review'
+        formData: formData,
       };
 
       if (id) {
+        await updateSubmission(id, { ...submissionData, status: 'draft' });
         await submitForReview(id);
       } else {
-        const newSubmission = await createSubmission(submissionData);
+        const newSubmission = await createSubmission({ ...submissionData, status: 'under_review' });
         await submitForReview(newSubmission._id || newSubmission.id);
       }
       
@@ -747,140 +767,155 @@ function SubmissionForm({ user }) {
               </div>
             </div>
 
-            <h3 style={{ marginTop: '2rem' }}>Information Sheet Requirements</h3>
-            <div className="info-box">
-              <p>Information sheet is a clear and concise document that will be given to potential participants explaining the details of the study so that they can make an informed decision about participating.</p>
-              <p>At a minimum, the Information Sheet must describe in lay terms:</p>
-              <ul>
-                <li>the nature and purpose of the research;</li>
-                <li>the procedures involved and how long it will take;</li>
-                <li>any risk or discomfort involved;</li>
-                <li>who will have access and under what conditions to any personal information;</li>
-                <li>the eventual disposal of data collected;</li>
-                <li>the name and contact details of the staff member responsible for the project and an invitation to contact them over any matter associated with the project.</li>
-              </ul>
-              <p><strong>The Information Sheet must conclude with the statement:</strong> "The Medical City for Military and Security Services Research and Studies Committee has reviewed and approved this project."</p>
-            </div>
-            <div className="form-group">
-              <label htmlFor="informationSheet">Information Sheet Content</label>
-              <textarea
-                id="informationSheet"
-                className="form-control"
-                value={formData.informationSheet}
-                onChange={(e) => handleChange('informationSheet', e.target.value)}
-                placeholder="Enter information sheet content or description"
-              />
-            </div>
-            <div className="form-group">
-              <label>Upload Information Sheet <span className="required">*</span></label>
-              <div className="file-upload">
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => handleFileChange('informationSheetFiles', e.target.files)}
-                />
-                <p>Click to upload or drag and drop</p>
-                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
-              </div>
-              {formData.informationSheetFiles.length > 0 && (
-                <div className="file-list">
-                  {formData.informationSheetFiles.map((file, index) => (
-                    <div key={index} className="file-item">
-                      <span>{getFileName(file)}</span>
-                      <button type="button" onClick={() => removeFile('informationSheetFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
-                    </div>
-                  ))}
+            {formData.dataCollectionType === 'Prospective' && (
+              <>
+                <h3 style={{ marginTop: '2rem' }}>Information Sheet Requirements</h3>
+                <div className="info-box">
+                  <p>Information sheet is a clear and concise document that will be given to potential participants explaining the details of the study so that they can make an informed decision about participating.</p>
+                  <p>At a minimum the Information Sheet must describe in lay terms:</p>
+                  <ul>
+                    <li>the nature and purpose of the research;</li>
+                    <li>the procedure and how long it will take;</li>
+                    <li>any risk or discomfort involved;</li>
+                    <li>who will have access and under what conditions to any personal information;</li>
+                    <li>the eventual disposal of data collected;</li>
+                    <li>the name and contact details of the staff member responsible for the project and an invitation to contact that person over any matter associated with the project</li>
+                  </ul>
+                  <p><strong>What if Participants have any Questions?</strong></p>
+                  <p>If you have any questions about our project, either now or in the future, please feel free to contact:</p>
                 </div>
-              )}
-            </div>
-
-            <h3 style={{ marginTop: '2rem' }}>Consent Form Requirements</h3>
-            <div className="info-box">
-              <p>The Consent Form must make it clear that a participant:</p>
-              <ol>
-                <li>understands the nature of the proposal;</li>
-                <li>has had all questions satisfactorily answered;</li>
-                <li>is aware of what will become of the data (including video or audio tapes and data held electronically) at the conclusion of the project;</li>
-                <li>knows that he or she is free to withdraw from the project at any time without disadvantage;</li>
-                <li>is aware of risks, remuneration and compensation;</li>
-                <li>is aware that the data may be published;</li>
-                <li>is aware that a third party (i.e. transcriber) may have access to the data;</li>
-                <li>is aware that every effort will be made to preserve the anonymity of the participant gives an express waiver, which must be in addition to and separate from this consent form.</li>
-              </ol>
-            </div>
-            <div className="form-group">
-              <label>Upload Consent Form(s) in Arabic and English</label>
-              <div className="file-upload">
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => handleFileChange('consentFormFiles', e.target.files)}
-                />
-                <p>Click to upload or drag and drop</p>
-                <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
-              </div>
-              {formData.consentFormFiles.length > 0 && (
-                <div className="file-list">
-                  {formData.consentFormFiles.map((file, index) => (
-                    <div key={index} className="file-item">
-                      <span>{getFileName(file)}</span>
-                      <button type="button" onClick={() => removeFile('consentFormFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
-                    </div>
-                  ))}
+                <div className="form-group">
+                  <label htmlFor="researcherContactName">1- Name of Researcher <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="researcherContactName"
+                    className="form-control"
+                    value={formData.researcherContactName}
+                    onChange={(e) => handleChange('researcherContactName', e.target.value)}
+                    placeholder="Enter researcher name"
+                  />
                 </div>
-              )}
-            </div>
-          </div>
-        );
+                <div className="form-group">
+                  <label htmlFor="researcherContactDepartment">2- Department of <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    id="researcherContactDepartment"
+                    className="form-control"
+                    value={formData.researcherContactDepartment}
+                    onChange={(e) => handleChange('researcherContactDepartment', e.target.value)}
+                    placeholder="Enter department"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="researcherContactTelephone">3- Telephone Number <span className="required">*</span></label>
+                  <div className="phone-input-group">
+                    <span className="phone-prefix">+968</span>
+                    <input
+                      type="tel"
+                      id="researcherContactTelephone"
+                      className="form-control"
+                      placeholder="9XXXXXXX"
+                      maxLength={8}
+                      value={formData.researcherContactTelephone?.replace(/^\+968/, '') || ''}
+                      onChange={(e) => {
+                        let raw = e.target.value.replace(/\D/g, '');
+                        if (raw.startsWith('968')) raw = raw.slice(3);
+                        if (raw === '' || (raw.startsWith('9') && raw.length <= 8)) {
+                          handleChange('researcherContactTelephone', raw ? `+968${raw}` : '');
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="researcherContactEmail">4- Email Address <span className="required">*</span></label>
+                  <input
+                    type="email"
+                    id="researcherContactEmail"
+                    className="form-control"
+                    value={formData.researcherContactEmail}
+                    onChange={(e) => handleChange('researcherContactEmail', e.target.value)}
+                    placeholder="Enter email address"
+                  />
+                </div>
+                <div className="info-box" style={{ marginTop: '0.5rem' }}>
+                  <p><strong>The Information Sheet must conclude with the statement:</strong> "The Medical City For Military and Security Services Research Committee has reviewed and approved this project."</p>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="informationSheet">Information Sheet Content</label>
+                  <textarea
+                    id="informationSheet"
+                    className="form-control"
+                    value={formData.informationSheet}
+                    onChange={(e) => handleChange('informationSheet', e.target.value)}
+                    placeholder="Enter information sheet content or description"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Please upload the information sheet <span className="required">*</span></label>
+                  <label htmlFor="file-informationSheetFiles" className="file-upload">
+                    <input
+                      id="file-informationSheetFiles"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => handleFileChange('informationSheetFiles', e.target.files)}
+                    />
+                    <p>Click to upload or drag and drop</p>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>Upload up to 5 supported files. Max 100 MB per file.</p>
+                  </label>
+                  {formData.informationSheetFiles.length > 0 && (
+                    <div className="file-list">
+                      {formData.informationSheetFiles.map((file, index) => (
+                        <div key={index} className="file-item">
+                          <span>{getFileName(file)}</span>
+                          <button type="button" onClick={() => removeFile('informationSheetFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-      case 4:
-        return (
-          <div className="step-content">
-            <h3>Handling of Confidential Information</h3>
-            <div className="form-group">
-              <label htmlFor="dataCapturingMethods">
-                What form of data capturing method(s) used in your research? (e.g. typewritten records, audiotapes, videotapes, machine generated reports etc.) <span className="required">*</span>
-              </label>
-              <textarea
-                id="dataCapturingMethods"
-                className="form-control"
-                value={formData.dataCapturingMethods}
-                onChange={(e) => handleChange('dataCapturingMethods', e.target.value)}
-                placeholder="Describe the data capturing methods used"
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="dataStorageMode">Mode of data Storage <span className="required">*</span></label>
-              <textarea
-                id="dataStorageMode"
-                className="form-control"
-                value={formData.dataStorageMode}
-                onChange={(e) => handleChange('dataStorageMode', e.target.value)}
-                placeholder="Describe how data will be stored"
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="dataAccess">Who will have access to data? <span className="required">*</span></label>
-              <textarea
-                id="dataAccess"
-                className="form-control"
-                value={formData.dataAccess}
-                onChange={(e) => handleChange('dataAccess', e.target.value)}
-                placeholder="List who will have access to the data"
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="confidentialityMeasures">How do you secure subjects confidentiality for this method? <span className="required">*</span></label>
-              <textarea
-                id="confidentialityMeasures"
-                className="form-control"
-                value={formData.confidentialityMeasures}
-                onChange={(e) => handleChange('confidentialityMeasures', e.target.value)}
-                placeholder="Describe confidentiality measures"
-              />
-            </div>
+                <h3 style={{ marginTop: '2rem' }}>Consent Form Requirements</h3>
+                <div className="info-box">
+                  <p>The Consent Form must make it clear that a participant:</p>
+                  <ol>
+                    <li>understands the nature of the proposal;</li>
+                    <li>has had all questions satisfactorily answered;</li>
+                    <li>is aware of what will become of the data (including video or audio tapes and data held electronically) at the conclusion of the project;</li>
+                    <li>knows that he or she is free to withdraw from the project at any time without disadvantage;</li>
+                    <li>is aware of risks, remuneration and compensation;</li>
+                    <li>is aware that the data may be published;</li>
+                    <li>is aware that a third party (i.e. transcriber) may have access to the data;</li>
+                    <li>is aware that every effort will be made to preserve the anonymity of the participant unless the participant gives an express waiver, which must be in addition to and separate from this consent form.</li>
+                  </ol>
+                </div>
+                <div className="form-group">
+                  <label>Please upload the consent form(s) in Arabic and English <span className="required">*</span></label>
+                  <label htmlFor="file-consentFormFiles" className="file-upload">
+                    <input
+                      id="file-consentFormFiles"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => handleFileChange('consentFormFiles', e.target.files)}
+                    />
+                    <p>Click to upload or drag and drop</p>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>Upload up to 5 supported files. Max 1 GB per file.</p>
+                  </label>
+                  {formData.consentFormFiles.length > 0 && (
+                    <div className="file-list">
+                      {formData.consentFormFiles.map((file, index) => (
+                        <div key={index} className="file-item">
+                          <span>{getFileName(file)}</span>
+                          <button type="button" onClick={() => removeFile('consentFormFiles', index)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             <h3 style={{ marginTop: '2rem' }}>Project Details</h3>
             <div className="form-group">
@@ -905,7 +940,7 @@ function SubmissionForm({ user }) {
               />
             </div>
             <div className="form-group">
-              <label>Multi-center research? <span className="required">*</span></label>
+              <label>Multi-center research <span className="required">*</span></label>
               <div className="radio-group">
                 <div className="radio-item">
                   <input
@@ -979,7 +1014,7 @@ function SubmissionForm({ user }) {
                   />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="grantStartDate">Grant Start Date <span className="required">*</span></label>
+                  <label htmlFor="grantStartDate">Validity Period: Start Date <span className="required">*</span></label>
                   <input
                     type="date"
                     id="grantStartDate"
@@ -989,7 +1024,7 @@ function SubmissionForm({ user }) {
                   />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="grantEndDate">Grant End Date <span className="required">*</span></label>
+                  <label htmlFor="grantEndDate">Validity Period: End Date <span className="required">*</span></label>
                   <input
                     type="date"
                     id="grantEndDate"
@@ -999,17 +1034,18 @@ function SubmissionForm({ user }) {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Upload Grant Documents <span className="required">*</span></label>
-                  <div className="file-upload">
+                  <label>Please upload documents confirming the details of the grant <span className="required">*</span></label>
+                  <label htmlFor="file-grantDocuments" className="file-upload">
                     <input
+                      id="file-grantDocuments"
                       type="file"
                       multiple
                       accept=".pdf,.doc,.docx"
                       onChange={(e) => handleFileChange('grantDocuments', e.target.files)}
                     />
                     <p>Click to upload or drag and drop</p>
-                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>Max 1 GB per file</p>
-                  </div>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>Upload up to 5 supported files. Max 1 GB per file.</p>
+                  </label>
                   {formData.grantDocuments.length > 0 && (
                     <div className="file-list">
                       {formData.grantDocuments.map((file, index) => (
@@ -1023,6 +1059,55 @@ function SubmissionForm({ user }) {
                 </div>
               </>
             )}
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="step-content">
+            <h3>Handling of Confidential Information</h3>
+            <div className="form-group">
+              <label htmlFor="dataCapturingMethods">
+                What form of data capturing method(s) used in your research? (e.g. typewritten records, audiotapes, videotapes, machine generated reports etc.) <span className="required">*</span>
+              </label>
+              <textarea
+                id="dataCapturingMethods"
+                className="form-control"
+                value={formData.dataCapturingMethods}
+                onChange={(e) => handleChange('dataCapturingMethods', e.target.value)}
+                placeholder="Describe the data capturing methods used"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="dataStorageMode">Mode of data Storage <span className="required">*</span></label>
+              <textarea
+                id="dataStorageMode"
+                className="form-control"
+                value={formData.dataStorageMode}
+                onChange={(e) => handleChange('dataStorageMode', e.target.value)}
+                placeholder="Describe how data will be stored"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="dataAccess">Who will have access to data? <span className="required">*</span></label>
+              <textarea
+                id="dataAccess"
+                className="form-control"
+                value={formData.dataAccess}
+                onChange={(e) => handleChange('dataAccess', e.target.value)}
+                placeholder="List who will have access to the data"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confidentialityMeasures">How do you secure subjects confidentiality for this method? <span className="required">*</span></label>
+              <textarea
+                id="confidentialityMeasures"
+                className="form-control"
+                value={formData.confidentialityMeasures}
+                onChange={(e) => handleChange('confidentialityMeasures', e.target.value)}
+                placeholder="Describe confidentiality measures"
+              />
+            </div>
           </div>
         );
 
@@ -1289,8 +1374,9 @@ function SubmissionForm({ user }) {
             </div>
             <div className="form-group">
               <label>Sample Size Calculation <span className="required">*</span></label>
-              <div className="file-upload">
+              <label htmlFor="file-sampleSizeFiles" className="file-upload">
                 <input
+                  id="file-sampleSizeFiles"
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx"
@@ -1298,7 +1384,7 @@ function SubmissionForm({ user }) {
                 />
                 <p>Click to upload or drag and drop</p>
                 <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
-              </div>
+              </label>
               {formData.sampleSizeFiles.length > 0 && (
                 <div className="file-list">
                   {formData.sampleSizeFiles.map((file, index) => (
@@ -1334,8 +1420,9 @@ function SubmissionForm({ user }) {
             </div>
             <div className="form-group">
               <label>Data and Research Variables</label>
-              <div className="file-upload">
+              <label htmlFor="file-dataVariablesFiles" className="file-upload">
                 <input
+                  id="file-dataVariablesFiles"
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx"
@@ -1343,7 +1430,7 @@ function SubmissionForm({ user }) {
                 />
                 <p>Click to upload or drag and drop</p>
                 <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 100 MB per file</p>
-              </div>
+              </label>
               {formData.dataVariablesFiles.length > 0 && (
                 <div className="file-list">
                   {formData.dataVariablesFiles.map((file, index) => (
@@ -1379,8 +1466,9 @@ function SubmissionForm({ user }) {
             </div>
             <div className="form-group">
               <label>Upload Research Proposal <span className="required">*</span></label>
-              <div className="file-upload">
+              <label htmlFor="file-researchProposalFiles" className="file-upload">
                 <input
+                  id="file-researchProposalFiles"
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx"
@@ -1388,7 +1476,7 @@ function SubmissionForm({ user }) {
                 />
                 <p>Click to upload or drag and drop</p>
                 <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>PDF or DOCX, Max 1 GB per file</p>
-              </div>
+              </label>
               {formData.researchProposalFiles.length > 0 && (
                 <div className="file-list">
                   {formData.researchProposalFiles.map((file, index) => (
