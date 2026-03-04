@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSubmission, updateFieldComments } from '../utils/api';
+import UserMenu from './UserMenu';
 import './ViewSubmission.css';
 
 const SECTION7_FIELDS = [
@@ -14,7 +15,7 @@ const SECTION7_FIELDS = [
   { key: 'references', label: 'References' },
 ];
 
-function ViewSubmission({ user }) {
+function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [submission, setSubmission] = useState(null);
@@ -82,7 +83,9 @@ function ViewSubmission({ user }) {
         <header className="header">
           <div className="header-content">
             <h1>View Submission</h1>
-            <button className="btn-logout" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+            <div className="header-user">
+              <UserMenu user={user} onLogout={onLogout} />
+            </div>
           </div>
         </header>
         <div className="container">
@@ -98,7 +101,9 @@ function ViewSubmission({ user }) {
         <header className="header">
           <div className="header-content">
             <h1>View Submission</h1>
-            <button className="btn-logout" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+            <div className="header-user">
+              <UserMenu user={user} onLogout={onLogout} />
+            </div>
           </div>
         </header>
         <div className="container">
@@ -122,17 +127,17 @@ function ViewSubmission({ user }) {
       <header className="header">
         <div className="header-content">
           <h1>View Submission</h1>
-          <div>
+          <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {submission.status === 'draft' && (
               <button
                 className="btn btn-secondary"
                 onClick={() => navigate(`/submission/${id}/edit`)}
-                style={{ marginRight: '1rem', background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}
+                style={{ background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}
               >
                 Edit
               </button>
             )}
-            <button className="btn-logout" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+            <UserMenu user={user} onLogout={onLogout} />
           </div>
         </div>
       </header>

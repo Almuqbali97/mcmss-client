@@ -18,17 +18,18 @@ body {
   min-height: 100vh;
 }
 
-/* Header Styles */
+/* Header Styles - same width and padding as .container so content aligns */
 .header {
   background: linear-gradient(135deg, #3d283a 0%, #5a3d52 100%);
   color: white;
-  padding: 1.5rem 2rem;
+  padding: 2rem 0;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .header-content {
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
+  padding: 0 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;

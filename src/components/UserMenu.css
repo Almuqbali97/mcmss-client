@@ -1,0 +1,128 @@
+.user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-menu-welcome {
+  font-size: 0.9rem;
+  color: white;
+}
+
+.user-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 0.35rem 0 0.5rem;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.user-menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.user-menu-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.user-menu-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 100%;
+  font-size: 0.6rem;
+  transition: transform 0.2s;
+}
+
+.user-menu-arrow.open {
+  transform: rotate(180deg);
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 200px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  color: #2c3e50;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.user-menu-header {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #eee;
+  background: #f8f9fa;
+}
+
+.user-menu-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #2c3e50;
+}
+
+.user-menu-role {
+  display: block;
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: capitalize;
+  margin-top: 0.15rem;
+}
+
+.user-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.user-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.user-menu-item:hover {
+  background: #f0f2f5;
+}
+
+.user-menu-item-logout {
+  color: #c0392b;
+  font-weight: 500;
+  border-top: 1px solid #eee;
+  margin-top: 0.25rem;
+  padding-top: 0.65rem;
+}
+
+.user-menu-item-logout:hover {
+  background: #fdeaea;
+}

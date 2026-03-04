@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createSubmission, updateSubmission, getSubmission, submitForReview } from '../utils/api';
+import UserMenu from './UserMenu';
 import './SubmissionForm.css';
 
 const STEPS = [
@@ -36,7 +37,7 @@ const FUNDING_SOURCES = [
   'Other'
 ];
 
-function SubmissionForm({ user }) {
+function SubmissionForm({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -1530,7 +1531,9 @@ function SubmissionForm({ user }) {
       <header className="header">
         <div className="header-content">
           <h1>Research Ethics Submission Form</h1>
-          <button className="btn-logout" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
+          <div className="header-user">
+            <UserMenu user={user} onLogout={onLogout} />
+          </div>
         </div>
       </header>
 

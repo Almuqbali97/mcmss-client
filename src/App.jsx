@@ -59,15 +59,15 @@ function App() {
           />
           <Route 
             path="/submission/new" 
-            element={user ? <SubmissionForm user={user} /> : <Navigate to="/login" />} 
+            element={user ? <SubmissionForm user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/submission/:id" 
-            element={user ? <ViewSubmission user={user} /> : <Navigate to="/login" />} 
+            element={user ? <ViewSubmission user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/submission/:id/edit" 
-            element={user ? <SubmissionForm user={user} /> : <Navigate to="/login" />} 
+            element={user ? <SubmissionForm user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/admin" 

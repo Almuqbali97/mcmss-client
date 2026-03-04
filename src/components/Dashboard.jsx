@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSubmissions } from '../utils/api';
+import UserMenu from './UserMenu';
 import './Dashboard.css';
 
 function Dashboard({ user, onLogout }) {
@@ -42,16 +43,7 @@ function Dashboard({ user, onLogout }) {
         <div className="header-content">
           <h1>Research and Studies Committee</h1>
           <div className="header-user">
-            <span>Welcome, {user.name}</span>
-            {user.role === 'admin' && (
-              <button className="btn btn-outline" onClick={() => navigate('/admin')} style={{ marginRight: '1rem', background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}>
-                Admin Panel
-              </button>
-            )}
-            <button className="btn btn-outline" onClick={() => navigate('/change-password')} style={{ marginRight: '1rem', background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}>
-              Change Password
-            </button>
-            <button className="btn-logout" onClick={onLogout}>Logout</button>
+            <UserMenu user={user} onLogout={onLogout} />
           </div>
         </div>
       </header>
