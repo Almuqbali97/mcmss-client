@@ -37,6 +37,18 @@ const FUNDING_SOURCES = [
   'Other'
 ];
 
+function countWords(text) {
+  if (!text || !String(text).trim()) return 0;
+  return String(text).trim().split(/\s+/).length;
+}
+
+function limitWords(text, maxWords) {
+  if (!text) return '';
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ');
+}
+
 function SubmissionForm({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,6 +95,8 @@ function SubmissionForm({ user, onLogout }) {
     proposedStartDate: '',
     duration: '',
     multiCenterResearch: '',
+    affiliatedCentersCount: '1',
+    affiliatedCenters: [{ name: '', country: '' }],
     fundingSource: '',
     fundingOther: '',
     grantSum: '',
@@ -95,6 +109,14 @@ function SubmissionForm({ user, onLogout }) {
     involvesDeception: '',
     intendToPublish: '',
     bloodTissueSamples: '',
+    bloodTissueNumberOfSamples: '',
+    bloodTissueSampleType: '',
+    bloodTissueQuantityPerSubject: '',
+    bloodTissueAnalyzedInOman: '',
+    bloodTissueAbroadInstitution: '',
+    bloodTissueAbroadCountry: '',
+    bloodTissueDiscardExplanation: '',
+    bloodTissueAbroadDocuments: [],
     piName: '',
     piSignature: '',
     declarationDate: '',
@@ -120,7 +142,25 @@ function SubmissionForm({ user, onLogout }) {
       if (autoSaved) {
         try {
           const savedData = JSON.parse(autoSaved);
-          setFormData(savedData);
+          setFormData((prev) => ({
+            ...prev,
+            ...savedData,
+            affiliatedCentersCount: savedData.affiliatedCentersCount || '1',
+            affiliatedCenters:
+              Array.isArray(savedData.affiliatedCenters) && savedData.affiliatedCenters.length > 0
+                ? savedData.affiliatedCenters
+                : [{ name: '', country: '' }],
+            bloodTissueNumberOfSamples: savedData.bloodTissueNumberOfSamples ?? '',
+            bloodTissueSampleType: savedData.bloodTissueSampleType ?? '',
+            bloodTissueQuantityPerSubject: savedData.bloodTissueQuantityPerSubject ?? '',
+            bloodTissueAnalyzedInOman: savedData.bloodTissueAnalyzedInOman ?? '',
+            bloodTissueAbroadInstitution: savedData.bloodTissueAbroadInstitution ?? '',
+            bloodTissueAbroadCountry: savedData.bloodTissueAbroadCountry ?? '',
+            bloodTissueDiscardExplanation: savedData.bloodTissueDiscardExplanation ?? '',
+            bloodTissueAbroadDocuments: Array.isArray(savedData.bloodTissueAbroadDocuments)
+              ? savedData.bloodTissueAbroadDocuments
+              : []
+          }));
         } catch (error) {
           console.error('Failed to load auto-saved data:', error);
         }
@@ -156,7 +196,25 @@ function SubmissionForm({ user, onLogout }) {
     try {
       const submission = await getSubmission(id);
       if (submission.formData) {
-        setFormData(submission.formData);
+        const fd = submission.formData;
+        setFormData({
+          ...fd,
+          affiliatedCentersCount: fd.affiliatedCentersCount || '1',
+          affiliatedCenters:
+            Array.isArray(fd.affiliatedCenters) && fd.affiliatedCenters.length > 0
+              ? fd.affiliatedCenters
+              : [{ name: '', country: '' }],
+          bloodTissueNumberOfSamples: fd.bloodTissueNumberOfSamples ?? '',
+          bloodTissueSampleType: fd.bloodTissueSampleType ?? '',
+          bloodTissueQuantityPerSubject: fd.bloodTissueQuantityPerSubject ?? '',
+          bloodTissueAnalyzedInOman: fd.bloodTissueAnalyzedInOman ?? '',
+          bloodTissueAbroadInstitution: fd.bloodTissueAbroadInstitution ?? '',
+          bloodTissueAbroadCountry: fd.bloodTissueAbroadCountry ?? '',
+          bloodTissueDiscardExplanation: fd.bloodTissueDiscardExplanation ?? '',
+          bloodTissueAbroadDocuments: Array.isArray(fd.bloodTissueAbroadDocuments)
+            ? fd.bloodTissueAbroadDocuments
+            : []
+        });
       }
     } catch (error) {
       console.error('Failed to load submission:', error);
@@ -222,6 +280,18 @@ function SubmissionForm({ user, onLogout }) {
     }));
   };
 
+  const updateAffiliatedCenter = (index, field, value) => {
+    setFormData(prev => {
+      const list = prev.affiliatedCenters || [{ name: '', country: '' }];
+      return {
+        ...prev,
+        affiliatedCenters: list.map((c, i) =>
+          i === index ? { ...c, [field]: value } : c
+        )
+      };
+    });
+  };
+
   const validateStep = (step) => {
     switch (step) {
       case 1:
@@ -229,8 +299,8 @@ function SubmissionForm({ user, onLogout }) {
       case 2:
         const pi = formData.principalInvestigator;
         const baseValid = pi.fullName && pi.jobTitle && pi.hospital && pi.department &&
-               pi.qualifications && pi.telephone && pi.email && pi.isFromMCMSS === 'Yes' &&
-               formData.mastersOrPhd;
+          pi.qualifications && pi.telephone && pi.email && pi.isFromMCMSS === 'Yes' &&
+          formData.mastersOrPhd;
         if (formData.mastersOrPhd === 'Yes') {
           return baseValid && formData.researchStudent && formData.supervisorName && formData.supervisorSignature;
         }
@@ -238,7 +308,18 @@ function SubmissionForm({ user, onLogout }) {
       case 3: {
         const base = formData.researchType.length > 0 && formData.dataCollectionType;
         if (!base) return false;
-        const project = formData.proposedStartDate && formData.duration && formData.multiCenterResearch && formData.fundingSource;
+        let project = formData.proposedStartDate && formData.duration && formData.multiCenterResearch && formData.fundingSource;
+        if (project && formData.multiCenterResearch === 'Yes') {
+          const num = formData.affiliatedCentersCount === '5 or more' ? 5 : parseInt(formData.affiliatedCentersCount || '1', 10);
+          const list = formData.affiliatedCenters || [{ name: '', country: '' }];
+          for (let i = 0; i < num; i++) {
+            const c = list[i];
+            if (!c?.name?.trim() || !c?.country?.trim()) {
+              project = false;
+              break;
+            }
+          }
+        }
         if (formData.fundingSource === 'Other') {
           if (!formData.fundingOther) return false;
         }
@@ -254,18 +335,41 @@ function SubmissionForm({ user, onLogout }) {
         return project;
       }
       case 4:
-        return formData.dataCapturingMethods && formData.dataStorageMode && 
-               formData.dataAccess && formData.confidentialityMeasures;
-      case 5:
-        return formData.previousEthicsApproval && formData.collectingPersonalInfo &&
-               formData.collectingFromOtherSource && formData.involvesDeception &&
-               formData.intendToPublish && formData.bloodTissueSamples;
+        return formData.dataCapturingMethods && formData.dataStorageMode &&
+          formData.dataAccess && formData.confidentialityMeasures;
+      case 5: {
+        const base5 = formData.previousEthicsApproval && formData.collectingPersonalInfo &&
+          formData.collectingFromOtherSource && formData.involvesDeception &&
+          formData.intendToPublish && formData.bloodTissueSamples;
+        if (!base5) return false;
+        if (formData.bloodTissueSamples === 'Yes') {
+          if (
+            !formData.bloodTissueNumberOfSamples?.trim() ||
+            !formData.bloodTissueSampleType?.trim() ||
+            !formData.bloodTissueQuantityPerSubject?.trim()
+          ) {
+            return false;
+          }
+          if (!formData.bloodTissueAnalyzedInOman) return false;
+          if (formData.bloodTissueAnalyzedInOman === 'No') {
+            return !!(
+              formData.bloodTissueAbroadInstitution?.trim() &&
+              formData.bloodTissueAbroadCountry?.trim() &&
+              formData.bloodTissueDiscardExplanation?.trim() &&
+              (formData.bloodTissueAbroadDocuments?.length > 0)
+            );
+          }
+        }
+        return true;
+      }
       case 6:
         return formData.piName && formData.piSignature && formData.declarationDate;
       case 7:
-        return formData.introduction && formData.objectives && formData.targetPopulation &&
-               formData.methodology && formData.statisticalAnalysis && formData.intervention &&
-               formData.expectedOutcomes && formData.references;
+        return formData.introduction?.trim() &&
+          countWords(formData.introduction) <= 500 &&
+          formData.objectives && formData.targetPopulation &&
+          formData.methodology && formData.statisticalAnalysis && formData.intervention &&
+          formData.expectedOutcomes && formData.references;
       default:
         return true;
     }
@@ -369,12 +473,12 @@ function SubmissionForm({ user, onLogout }) {
         const newSubmission = await createSubmission({ ...submissionData, status: 'under_review' });
         await submitForReview(newSubmission._id || newSubmission.id);
       }
-      
+
       // Ensure minimum loading time of 1.8 seconds
       const elapsed = Date.now() - startTime;
       const remainingTime = Math.max(0, 1800 - elapsed);
       await new Promise(resolve => setTimeout(resolve, remainingTime));
-      
+
       clearAutoSave(); // Clear auto-save when submitted
       setLoading(false);
       setShowSuccessView(true);
@@ -506,6 +610,9 @@ function SubmissionForm({ user, onLogout }) {
                 <option value="Al Khoudh">Al Khoudh</option>
                 <option value="Muscat">Muscat</option>
                 <option value="Salalah">Salalah</option>
+                <option value="Samail">Samail</option>
+                <option value="MAM">MAM</option>
+                <option value="Medical City School">Medical City School</option>
               </select>
             </div>
             <div className="form-group">
@@ -950,7 +1057,13 @@ function SubmissionForm({ user, onLogout }) {
                     name="multiCenterResearch"
                     value="Yes"
                     checked={formData.multiCenterResearch === 'Yes'}
-                    onChange={(e) => handleChange('multiCenterResearch', e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData(prev => ({
+                        ...prev,
+                        multiCenterResearch: v
+                      }));
+                    }}
                   />
                   <label htmlFor="multiCenterYes">Yes</label>
                 </div>
@@ -961,12 +1074,88 @@ function SubmissionForm({ user, onLogout }) {
                     name="multiCenterResearch"
                     value="No"
                     checked={formData.multiCenterResearch === 'No'}
-                    onChange={(e) => handleChange('multiCenterResearch', e.target.value)}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        multiCenterResearch: e.target.value,
+                        affiliatedCentersCount: '1',
+                        affiliatedCenters: [{ name: '', country: '' }]
+                      }));
+                    }}
                   />
                   <label htmlFor="multiCenterNo">No</label>
                 </div>
               </div>
             </div>
+
+            {formData.multiCenterResearch === 'Yes' && (
+              <>
+                <div className="form-group">
+                  <label>How many affiliated centers? <span className="required">*</span></label>
+                  <div className="radio-group">
+                    {['1', '2', '3', '4', '5 or more'].map((count) => (
+                      <div key={count} className="radio-item">
+                        <input
+                          type="radio"
+                          id={`affiliatedCentersCount${count}`}
+                          name="affiliatedCentersCount"
+                          value={count}
+                          checked={formData.affiliatedCentersCount === count}
+                          onChange={(e) => {
+                            handleChange('affiliatedCentersCount', e.target.value);
+                            const num = count === '5 or more' ? 5 : parseInt(count, 10);
+                            const list = formData.affiliatedCenters || [{ name: '', country: '' }];
+                            if (num > list.length) {
+                              const added = Array(num - list.length)
+                                .fill(null)
+                                .map(() => ({ name: '', country: '' }));
+                              setFormData(prev => ({
+                                ...prev,
+                                affiliatedCenters: [...(prev.affiliatedCenters || []), ...added]
+                              }));
+                            } else if (num < list.length) {
+                              setFormData(prev => ({
+                                ...prev,
+                                affiliatedCenters: (prev.affiliatedCenters || []).slice(0, num)
+                              }));
+                            }
+                          }}
+                        />
+                        <label htmlFor={`affiliatedCentersCount${count}`}>{count}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {(formData.affiliatedCenters || [{ name: '', country: '' }]).map((center, index) => (
+                  <div key={index} className="co-investigator-section">
+                    <h4>Affiliated Center {index + 1}</h4>
+                    <div className="form-group">
+                      <label htmlFor={`affiliatedCenterName${index}`}>Name <span className="required">*</span></label>
+                      <input
+                        type="text"
+                        id={`affiliatedCenterName${index}`}
+                        className="form-control"
+                        value={center.name}
+                        onChange={(e) => updateAffiliatedCenter(index, 'name', e.target.value)}
+                        placeholder="Center name"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor={`affiliatedCenterCountry${index}`}>Country of Affiliation <span className="required">*</span></label>
+                      <input
+                        type="text"
+                        id={`affiliatedCenterCountry${index}`}
+                        className="form-control"
+                        value={center.country}
+                        onChange={(e) => updateAffiliatedCenter(index, 'country', e.target.value)}
+                        placeholder="Country"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
 
             <h3 style={{ marginTop: '2rem' }}>Details of Funding Source</h3>
             <div className="form-group">
@@ -1272,12 +1461,176 @@ function SubmissionForm({ user, onLogout }) {
                     name="bloodTissueSamples"
                     value="No"
                     checked={formData.bloodTissueSamples === 'No'}
-                    onChange={(e) => handleChange('bloodTissueSamples', e.target.value)}
+                    onChange={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        bloodTissueSamples: 'No',
+                        bloodTissueNumberOfSamples: '',
+                        bloodTissueSampleType: '',
+                        bloodTissueQuantityPerSubject: '',
+                        bloodTissueAnalyzedInOman: '',
+                        bloodTissueAbroadInstitution: '',
+                        bloodTissueAbroadCountry: '',
+                        bloodTissueDiscardExplanation: '',
+                        bloodTissueAbroadDocuments: []
+                      }));
+                    }}
                   />
                   <label htmlFor="bloodTissueNo">No</label>
                 </div>
               </div>
             </div>
+            {formData.bloodTissueSamples === 'Yes' && (
+              <div className="award-details-section">
+                <div className="form-group">
+                  <label htmlFor="bloodTissueNumberOfSamples">
+                    Please specify: Number of samples <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bloodTissueNumberOfSamples"
+                    className="form-control"
+                    value={formData.bloodTissueNumberOfSamples}
+                    onChange={(e) => handleChange('bloodTissueNumberOfSamples', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="bloodTissueSampleType">
+                    Please specify: Type of sample <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bloodTissueSampleType"
+                    className="form-control"
+                    value={formData.bloodTissueSampleType}
+                    onChange={(e) => handleChange('bloodTissueSampleType', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="bloodTissueQuantityPerSubject">
+                    Please specify: Quantity of sample from each subject <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bloodTissueQuantityPerSubject"
+                    className="form-control"
+                    value={formData.bloodTissueQuantityPerSubject}
+                    onChange={(e) => handleChange('bloodTissueQuantityPerSubject', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Will blood/tissue samples be analyzed in Oman? <span className="required">*</span></label>
+                  <div className="radio-group">
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="bloodTissueOmanYes"
+                        name="bloodTissueAnalyzedInOman"
+                        value="Yes"
+                        checked={formData.bloodTissueAnalyzedInOman === 'Yes'}
+                        onChange={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            bloodTissueAnalyzedInOman: 'Yes',
+                            bloodTissueAbroadInstitution: '',
+                            bloodTissueAbroadCountry: '',
+                            bloodTissueDiscardExplanation: '',
+                            bloodTissueAbroadDocuments: []
+                          }));
+                        }}
+                      />
+                      <label htmlFor="bloodTissueOmanYes">Yes</label>
+                    </div>
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="bloodTissueOmanNo"
+                        name="bloodTissueAnalyzedInOman"
+                        value="No"
+                        checked={formData.bloodTissueAnalyzedInOman === 'No'}
+                        onChange={(e) => handleChange('bloodTissueAnalyzedInOman', e.target.value)}
+                      />
+                      <label htmlFor="bloodTissueOmanNo">No</label>
+                    </div>
+                  </div>
+                </div>
+
+                {formData.bloodTissueAnalyzedInOman === 'No' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="bloodTissueAbroadInstitution">
+                        Name of institution (where samples will be analyzed) <span className="required">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="bloodTissueAbroadInstitution"
+                        className="form-control"
+                        value={formData.bloodTissueAbroadInstitution}
+                        onChange={(e) => handleChange('bloodTissueAbroadInstitution', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="bloodTissueAbroadCountry">
+                        Country <span className="required">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="bloodTissueAbroadCountry"
+                        className="form-control"
+                        value={formData.bloodTissueAbroadCountry}
+                        onChange={(e) => handleChange('bloodTissueAbroadCountry', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="bloodTissueDiscardExplanation">
+                        Explain how you will discard the samples after analysis <span className="required">*</span>
+                      </label>
+                      <textarea
+                        id="bloodTissueDiscardExplanation"
+                        className="form-control"
+                        rows={4}
+                        value={formData.bloodTissueDiscardExplanation}
+                        onChange={(e) => handleChange('bloodTissueDiscardExplanation', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Please upload all supporting documents <span className="required">*</span></label>
+                      <label htmlFor="file-bloodTissueAbroadDocuments" className="file-upload">
+                        <input
+                          id="file-bloodTissueAbroadDocuments"
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => handleFileChange('bloodTissueAbroadDocuments', e.target.files)}
+                        />
+                        <p>Click to upload or drag and drop</p>
+                        <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+                          Upload up to 5 supported files. Max 100 MB per file.
+                        </p>
+                      </label>
+                      {formData.bloodTissueAbroadDocuments.length > 0 && (
+                        <div className="file-list">
+                          {formData.bloodTissueAbroadDocuments.map((file, index) => (
+                            <div key={index} className="file-item">
+                              <span>{getFileName(file)}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeFile('bloodTissueAbroadDocuments', index)}
+                                className="btn btn-danger"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         );
 
@@ -1334,11 +1687,11 @@ function SubmissionForm({ user, onLogout }) {
                 id="introduction"
                 className="form-control"
                 value={formData.introduction}
-                onChange={(e) => handleChange('introduction', e.target.value)}
+                onChange={(e) => handleChange('introduction', limitWords(e.target.value, 500))}
                 placeholder="Provide an introduction to your research"
                 rows="6"
               />
-              <small style={{ color: '#6c757d' }}>{formData.introduction.length} / 500 words</small>
+              <small style={{ color: '#6c757d' }}>{countWords(formData.introduction)} / 500 words</small>
             </div>
             <div className="form-group">
               <label htmlFor="objectives">Objectives (Primary & Secondary) <span className="required">*</span></label>
@@ -1504,8 +1857,8 @@ function SubmissionForm({ user, onLogout }) {
         <div className="submission-success-card">
           <div className="success-icon">
             <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="10" stroke="#28a745" strokeWidth="2" fill="none"/>
-              <path d="M8 12l2 2 4-4" stroke="#28a745" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="12" r="10" stroke="#28a745" strokeWidth="2" fill="none" />
+              <path d="M8 12l2 2 4-4" stroke="#28a745" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h2>Submission Successful!</h2>
@@ -1515,7 +1868,7 @@ function SubmissionForm({ user, onLogout }) {
           <p className="success-submessage">
             You will be notified once the review process is complete.
           </p>
-          <button 
+          <button
             className="btn btn-primary btn-success-home"
             onClick={() => navigate('/dashboard')}
           >
@@ -1545,7 +1898,7 @@ function SubmissionForm({ user, onLogout }) {
                 key={step.id}
                 className={`step ${currentStep === step.id ? 'active' : ''} ${currentStep > step.id ? 'completed' : ''}`}
               >
-                <div 
+                <div
                   className="step-number"
                   onClick={() => handleStepClick(step.id)}
                   style={{ cursor: 'pointer' }}
@@ -1568,8 +1921,8 @@ function SubmissionForm({ user, onLogout }) {
                 </button>
               )}
               {!id && autoSaveStatus && (
-                <span style={{ 
-                  fontSize: '0.875rem', 
+                <span style={{
+                  fontSize: '0.875rem',
                   color: autoSaveStatus === 'Saving...' ? '#8b6700' : '#28a745',
                   fontStyle: 'italic'
                 }}>
@@ -1621,8 +1974,8 @@ function SubmissionForm({ user, onLogout }) {
               The Principle Investigator should be from the MCMSS.
             </p>
             <div className="modal-actions">
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={() => {
                   setShowMCMSSModal(false);
                   // Reset to empty or keep as No but prevent proceeding
@@ -1644,14 +1997,14 @@ function SubmissionForm({ user, onLogout }) {
               Are you sure you want to submit this form for review?
             </p>
             <div className="modal-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button 
-                className="btn btn-secondary" 
+              <button
+                className="btn btn-secondary"
                 onClick={() => setShowConfirmModal(false)}
               >
                 Cancel
               </button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={confirmSubmit}
                 disabled={loading}
               >

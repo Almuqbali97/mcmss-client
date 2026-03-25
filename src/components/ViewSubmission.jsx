@@ -148,7 +148,7 @@ function ViewSubmission({ user, onLogout }) {
             <div>
               <h2>{submission.researchTitle || 'Untitled Research'}</h2>
               <p className="submission-meta">
-                Submitted: {formatDate(submission.submittedDate)} | 
+                Submitted: {formatDate(submission.submittedDate)} |
                 Status: <span className={getStatusClass(submission.status)}>
                   {submission.status.replace('_', ' ').toUpperCase()}
                 </span>
@@ -241,6 +241,19 @@ function ViewSubmission({ user, onLogout }) {
             <p><strong>Proposed Start Date:</strong> {formData.proposedStartDate || 'N/A'}</p>
             <p><strong>Duration:</strong> {formData.duration ? `${formData.duration} months` : 'N/A'}</p>
             <p><strong>Multi-center Research:</strong> {formData.multiCenterResearch || 'N/A'}</p>
+            {formData.multiCenterResearch === 'Yes' &&
+              formData.affiliatedCenters &&
+              formData.affiliatedCenters.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '1rem' }}>Affiliated Centers</h4>
+                  {formData.affiliatedCenters.map((center, index) => (
+                    <div key={index} className="co-investigator-box">
+                      <p><strong>Center {index + 1} — Name:</strong> {center.name || 'N/A'}</p>
+                      <p><strong>Country of Affiliation:</strong> {center.country || 'N/A'}</p>
+                    </div>
+                  ))}
+                </>
+              )}
             <p><strong>Funding Source:</strong> {formData.fundingSource || 'N/A'}</p>
             {formData.fundingSource === 'Other' && (
               <p><strong>Other Funding Source:</strong> {formData.fundingOther || 'N/A'}</p>
@@ -264,6 +277,32 @@ function ViewSubmission({ user, onLogout }) {
             <p><strong>Involves Deception:</strong> {formData.involvesDeception || 'N/A'}</p>
             <p><strong>Intend to Publish:</strong> {formData.intendToPublish || 'N/A'}</p>
             <p><strong>Blood/Tissue Samples:</strong> {formData.bloodTissueSamples || 'N/A'}</p>
+            {formData.bloodTissueSamples === 'Yes' && (
+              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
+                <p><strong>Number of samples:</strong> {formData.bloodTissueNumberOfSamples || 'N/A'}</p>
+                <p><strong>Type of sample:</strong> {formData.bloodTissueSampleType || 'N/A'}</p>
+                <p><strong>Quantity of sample from each subject:</strong> {formData.bloodTissueQuantityPerSubject || 'N/A'}</p>
+                <p><strong>Samples analyzed in Oman:</strong> {formData.bloodTissueAnalyzedInOman || 'N/A'}</p>
+                {formData.bloodTissueAnalyzedInOman === 'No' && (
+                  <>
+                    <p><strong>Institution (analysis abroad):</strong> {formData.bloodTissueAbroadInstitution || 'N/A'}</p>
+                    <p><strong>Country:</strong> {formData.bloodTissueAbroadCountry || 'N/A'}</p>
+                    <p><strong>Discard of samples after analysis:</strong></p>
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{formData.bloodTissueDiscardExplanation || 'N/A'}</p>
+                    {formData.bloodTissueAbroadDocuments && formData.bloodTissueAbroadDocuments.length > 0 && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <strong>Supporting documents:</strong>
+                        <ul>
+                          {formData.bloodTissueAbroadDocuments.map((file, index) => (
+                            <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
