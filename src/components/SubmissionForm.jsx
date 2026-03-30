@@ -37,6 +37,8 @@ const FUNDING_SOURCES = [
   'Other'
 ];
 
+const ETHICS_APPROVAL_MAX_FILE_BYTES = 100 * 1024 * 1024;
+
 function countWords(text) {
   if (!text || !String(text).trim()) return 0;
   return String(text).trim().split(/\s+/).length;
@@ -104,9 +106,15 @@ function SubmissionForm({ user, onLogout }) {
     grantEndDate: '',
     grantDocuments: [],
     previousEthicsApproval: '',
+    previousEthicsApplicationDate: '',
+    previousEthicsProjectApproved: '',
+    ethicsApprovalDocuments: [],
     collectingPersonalInfo: '',
     collectingFromOtherSource: '',
+    intendPublishPersonalInfoFromOtherSource: '',
+    publishPersonalInfoFromOtherSourceDetails: '',
     involvesDeception: '',
+    deceptionDebriefingProcedures: '',
     intendToPublish: '',
     bloodTissueSamples: '',
     bloodTissueNumberOfSamples: '',
@@ -159,7 +167,15 @@ function SubmissionForm({ user, onLogout }) {
             bloodTissueDiscardExplanation: savedData.bloodTissueDiscardExplanation ?? '',
             bloodTissueAbroadDocuments: Array.isArray(savedData.bloodTissueAbroadDocuments)
               ? savedData.bloodTissueAbroadDocuments
-              : []
+              : [],
+            ethicsApprovalDocuments: Array.isArray(savedData.ethicsApprovalDocuments)
+              ? savedData.ethicsApprovalDocuments
+              : [],
+            intendPublishPersonalInfoFromOtherSource:
+              savedData.intendPublishPersonalInfoFromOtherSource ?? '',
+            publishPersonalInfoFromOtherSourceDetails:
+              savedData.publishPersonalInfoFromOtherSourceDetails ?? '',
+            deceptionDebriefingProcedures: savedData.deceptionDebriefingProcedures ?? ''
           }));
         } catch (error) {
           console.error('Failed to load auto-saved data:', error);
@@ -187,6 +203,15 @@ function SubmissionForm({ user, onLogout }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentStep]);
 
+  // Section 6 declaration PI name mirrors Section 2 Principal Investigator full name
+  useEffect(() => {
+    const fullName = formData.principalInvestigator?.fullName ?? '';
+    setFormData((prev) => {
+      if (prev.piName === fullName) return prev;
+      return { ...prev, piName: fullName };
+    });
+  }, [formData.principalInvestigator?.fullName]);
+
   // Clear auto-save when form is submitted
   const clearAutoSave = () => {
     localStorage.removeItem('submissionFormAutoSave');
@@ -213,7 +238,17 @@ function SubmissionForm({ user, onLogout }) {
           bloodTissueDiscardExplanation: fd.bloodTissueDiscardExplanation ?? '',
           bloodTissueAbroadDocuments: Array.isArray(fd.bloodTissueAbroadDocuments)
             ? fd.bloodTissueAbroadDocuments
-            : []
+            : [],
+          previousEthicsApplicationDate: fd.previousEthicsApplicationDate ?? '',
+          previousEthicsProjectApproved: fd.previousEthicsProjectApproved ?? '',
+          ethicsApprovalDocuments: Array.isArray(fd.ethicsApprovalDocuments)
+            ? fd.ethicsApprovalDocuments
+            : [],
+          intendPublishPersonalInfoFromOtherSource:
+            fd.intendPublishPersonalInfoFromOtherSource ?? '',
+          publishPersonalInfoFromOtherSourceDetails:
+            fd.publishPersonalInfoFromOtherSourceDetails ?? '',
+          deceptionDebriefingProcedures: fd.deceptionDebriefingProcedures ?? ''
         });
       }
     } catch (error) {
@@ -262,6 +297,22 @@ function SubmissionForm({ user, onLogout }) {
       ...prev,
       [field]: prev[field].filter((_, i) => i !== index)
     }));
+  };
+
+  const handleEthicsApprovalFiles = (files) => {
+    const fileArray = Array.from(files || []);
+    const valid = [];
+    for (const f of fileArray) {
+      if (f.size > ETHICS_APPROVAL_MAX_FILE_BYTES) {
+        alert(`File "${f.name}" exceeds 100 MB and was not added.`);
+        continue;
+      }
+      valid.push(f);
+    }
+    setFormData((prev) => {
+      const existing = prev.ethicsApprovalDocuments || [];
+      return { ...prev, ethicsApprovalDocuments: [...existing, ...valid].slice(0, 5) };
+    });
   };
 
   const addCoInvestigator = () => {
@@ -342,6 +393,27 @@ function SubmissionForm({ user, onLogout }) {
           formData.collectingFromOtherSource && formData.involvesDeception &&
           formData.intendToPublish && formData.bloodTissueSamples;
         if (!base5) return false;
+        if (formData.previousEthicsApproval === 'Yes') {
+          if (
+            !formData.previousEthicsApplicationDate ||
+            !formData.previousEthicsProjectApproved ||
+            !formData.ethicsApprovalDocuments?.length
+          ) {
+            return false;
+          }
+        }
+        if (formData.collectingFromOtherSource === 'Yes') {
+          if (!formData.intendPublishPersonalInfoFromOtherSource) return false;
+          if (
+            formData.intendPublishPersonalInfoFromOtherSource === 'Yes' &&
+            !formData.publishPersonalInfoFromOtherSourceDetails?.trim()
+          ) {
+            return false;
+          }
+        }
+        if (formData.involvesDeception === 'Yes' && !formData.deceptionDebriefingProcedures?.trim()) {
+          return false;
+        }
         if (formData.bloodTissueSamples === 'Yes') {
           if (
             !formData.bloodTissueNumberOfSamples?.trim() ||
@@ -363,7 +435,11 @@ function SubmissionForm({ user, onLogout }) {
         return true;
       }
       case 6:
-        return formData.piName && formData.piSignature && formData.declarationDate;
+        return (
+          !!formData.principalInvestigator?.fullName?.trim() &&
+          formData.piSignature &&
+          formData.declarationDate
+        );
       case 7:
         return formData.introduction?.trim() &&
           countWords(formData.introduction) <= 500 &&
@@ -373,6 +449,13 @@ function SubmissionForm({ user, onLogout }) {
       default:
         return true;
     }
+  };
+
+  const validateEntireForm = () => {
+    for (let step = 1; step <= STEPS.length; step++) {
+      if (!validateStep(step)) return false;
+    }
+    return true;
   };
 
   const handleNext = () => {
@@ -451,11 +534,19 @@ function SubmissionForm({ user, onLogout }) {
   };
 
   const handleSubmit = () => {
-    // Show confirmation modal instead of browser popup
+    if (!validateEntireForm()) {
+      alert('Please complete all required fields in every section before submitting.');
+      return;
+    }
     setShowConfirmModal(true);
   };
 
   const confirmSubmit = async () => {
+    if (!validateEntireForm()) {
+      setShowConfirmModal(false);
+      alert('Please complete all required fields in every section before submitting.');
+      return;
+    }
     setShowConfirmModal(false);
     setLoading(true);
     try {
@@ -470,7 +561,7 @@ function SubmissionForm({ user, onLogout }) {
         await updateSubmission(id, { ...submissionData, status: 'draft' });
         await submitForReview(id);
       } else {
-        const newSubmission = await createSubmission({ ...submissionData, status: 'under_review' });
+        const newSubmission = await createSubmission({ ...submissionData, status: 'draft' });
         await submitForReview(newSubmission._id || newSubmission.id);
       }
 
@@ -1315,7 +1406,13 @@ function SubmissionForm({ user, onLogout }) {
                     name="previousEthicsApproval"
                     value="Yes"
                     checked={formData.previousEthicsApproval === 'Yes'}
-                    onChange={(e) => handleChange('previousEthicsApproval', e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        previousEthicsApproval: v
+                      }));
+                    }}
                   />
                   <label htmlFor="previousEthicsYes">Yes</label>
                 </div>
@@ -1326,12 +1423,103 @@ function SubmissionForm({ user, onLogout }) {
                     name="previousEthicsApproval"
                     value="No"
                     checked={formData.previousEthicsApproval === 'No'}
-                    onChange={(e) => handleChange('previousEthicsApproval', e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        previousEthicsApproval: v,
+                        ...(v === 'No'
+                          ? {
+                              previousEthicsApplicationDate: '',
+                              previousEthicsProjectApproved: '',
+                              ethicsApprovalDocuments: []
+                            }
+                          : {})
+                      }));
+                    }}
                   />
                   <label htmlFor="previousEthicsNo">No</label>
                 </div>
               </div>
             </div>
+            {formData.previousEthicsApproval === 'Yes' && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="previousEthicsApplicationDate">
+                    When did you apply? <span className="required">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    id="previousEthicsApplicationDate"
+                    className="form-control"
+                    value={formData.previousEthicsApplicationDate}
+                    onChange={(e) => handleChange('previousEthicsApplicationDate', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Was the research project approved? <span className="required">*</span></label>
+                  <div className="radio-group">
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="previousEthicsProjectApprovedYes"
+                        name="previousEthicsProjectApproved"
+                        value="Yes"
+                        checked={formData.previousEthicsProjectApproved === 'Yes'}
+                        onChange={(e) => handleChange('previousEthicsProjectApproved', e.target.value)}
+                      />
+                      <label htmlFor="previousEthicsProjectApprovedYes">Yes</label>
+                    </div>
+                    <div className="radio-item">
+                      <input
+                        type="radio"
+                        id="previousEthicsProjectApprovedNo"
+                        name="previousEthicsProjectApproved"
+                        value="No"
+                        checked={formData.previousEthicsProjectApproved === 'No'}
+                        onChange={(e) => handleChange('previousEthicsProjectApproved', e.target.value)}
+                      />
+                      <label htmlFor="previousEthicsProjectApprovedNo">No</label>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>
+                    Please attach a copy of ethics approval(s) obtained. <span className="required">*</span>
+                  </label>
+                  <label htmlFor="file-ethicsApprovalDocuments" className="file-upload">
+                    <input
+                      id="file-ethicsApprovalDocuments"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => handleEthicsApprovalFiles(e.target.files)}
+                    />
+                    <p>Click to upload or drag and drop</p>
+                    <p style={{ fontSize: '0.85rem', color: '#6c757d' }}>
+                      Upload up to 5 supported files. Max 100 MB per file.
+                    </p>
+                  </label>
+                  {formData.ethicsApprovalDocuments.length > 0 && (
+                    <div className="file-list">
+                      {formData.ethicsApprovalDocuments.map((file, index) => (
+                        <div key={index} className="file-item">
+                          <span>{getFileName(file)}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFile('ethicsApprovalDocuments', index)}
+                            className="btn btn-danger"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
             <div className="form-group">
               <label>Are you collecting and storing personal information directly from the individual concerned that could identify the individual? <span className="required">*</span></label>
               <div className="radio-group">
@@ -1380,12 +1568,88 @@ function SubmissionForm({ user, onLogout }) {
                     name="collectingFromOtherSource"
                     value="No"
                     checked={formData.collectingFromOtherSource === 'No'}
-                    onChange={(e) => handleChange('collectingFromOtherSource', e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        collectingFromOtherSource: v,
+                        ...(v === 'No'
+                          ? {
+                              intendPublishPersonalInfoFromOtherSource: '',
+                              publishPersonalInfoFromOtherSourceDetails: ''
+                            }
+                          : {})
+                      }));
+                    }}
                   />
                   <label htmlFor="collectingOtherNo">No</label>
                 </div>
               </div>
             </div>
+            {formData.collectingFromOtherSource === 'Yes' && (
+              <div className="form-group">
+                <label>
+                  Do you intend to publish any personal information they have provided?{' '}
+                  <span className="required">*</span>
+                </label>
+                <div className="radio-group">
+                  <div className="radio-item">
+                    <input
+                      type="radio"
+                      id="intendPublishPersonalInfoOtherYes"
+                      name="intendPublishPersonalInfoFromOtherSource"
+                      value="Yes"
+                      checked={formData.intendPublishPersonalInfoFromOtherSource === 'Yes'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          intendPublishPersonalInfoFromOtherSource: v,
+                          ...(v === 'No' ? { publishPersonalInfoFromOtherSourceDetails: '' } : {})
+                        }));
+                      }}
+                    />
+                    <label htmlFor="intendPublishPersonalInfoOtherYes">Yes</label>
+                  </div>
+                  <div className="radio-item">
+                    <input
+                      type="radio"
+                      id="intendPublishPersonalInfoOtherNo"
+                      name="intendPublishPersonalInfoFromOtherSource"
+                      value="No"
+                      checked={formData.intendPublishPersonalInfoFromOtherSource === 'No'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          intendPublishPersonalInfoFromOtherSource: v,
+                          ...(v === 'No' ? { publishPersonalInfoFromOtherSourceDetails: '' } : {})
+                        }));
+                      }}
+                    />
+                    <label htmlFor="intendPublishPersonalInfoOtherNo">No</label>
+                  </div>
+                </div>
+              </div>
+            )}
+            {formData.collectingFromOtherSource === 'Yes' &&
+              formData.intendPublishPersonalInfoFromOtherSource === 'Yes' && (
+                <div className="form-group">
+                  <label htmlFor="publishPersonalInfoFromOtherSourceDetails">
+                    Please specify in what form you intend to do this? <span className="required">*</span>
+                  </label>
+                  <textarea
+                    id="publishPersonalInfoFromOtherSourceDetails"
+                    className="form-control"
+                    rows={4}
+                    value={formData.publishPersonalInfoFromOtherSourceDetails}
+                    onChange={(e) =>
+                      handleChange('publishPersonalInfoFromOtherSourceDetails', e.target.value)
+                    }
+                    placeholder="Describe the form in which you intend to publish this information"
+                  />
+                </div>
+              )}
             <div className="form-group">
               <label>Does the research involve any form of deception? <span className="required">*</span></label>
               <div className="radio-group">
@@ -1407,12 +1671,34 @@ function SubmissionForm({ user, onLogout }) {
                     name="involvesDeception"
                     value="No"
                     checked={formData.involvesDeception === 'No'}
-                    onChange={(e) => handleChange('involvesDeception', e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        involvesDeception: v,
+                        ...(v === 'No' ? { deceptionDebriefingProcedures: '' } : {})
+                      }));
+                    }}
                   />
                   <label htmlFor="deceptionNo">No</label>
                 </div>
               </div>
             </div>
+            {formData.involvesDeception === 'Yes' && (
+              <div className="form-group">
+                <label htmlFor="deceptionDebriefingProcedures">
+                  Please explain all debriefing procedures. <span className="required">*</span>
+                </label>
+                <textarea
+                  id="deceptionDebriefingProcedures"
+                  className="form-control"
+                  rows={5}
+                  value={formData.deceptionDebriefingProcedures}
+                  onChange={(e) => handleChange('deceptionDebriefingProcedures', e.target.value)}
+                  placeholder="Describe how and when participants will be debriefed"
+                />
+              </div>
+            )}
             <div className="form-group">
               <label>Do you intend to publish or disseminate the findings? <span className="required">*</span></label>
               <div className="radio-group">
@@ -1648,10 +1934,13 @@ function SubmissionForm({ user, onLogout }) {
                 type="text"
                 id="piName"
                 className="form-control"
-                value={formData.piName}
-                onChange={(e) => handleChange('piName', e.target.value)}
-                placeholder="Enter full name"
+                readOnly
+                value={formData.principalInvestigator?.fullName || ''}
+                style={{ backgroundColor: '#f8f9fa', cursor: 'default' }}
               />
+              <p style={{ fontSize: '0.85rem', color: '#6c757d', marginTop: '0.35rem' }}>
+                Taken from the Principal Investigator details in Section 2. Update the name there if needed.
+              </p>
             </div>
             <div className="form-group">
               <label htmlFor="piSignature">Signature <span className="required">*</span></label>

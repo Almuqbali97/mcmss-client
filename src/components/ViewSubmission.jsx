@@ -15,6 +15,13 @@ const SECTION7_FIELDS = [
   { key: 'references', label: 'References' },
 ];
 
+/** Uploaded files from the API are { filename, originalName, path }; the form may use File.name or _fileMeta. */
+function getUploadedFileDisplayName(file) {
+  if (file == null) return 'File';
+  if (typeof file === 'string') return file;
+  return file.name || file.originalName || file._fileMeta?.name || 'File';
+}
+
 function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -213,7 +220,7 @@ function ViewSubmission({ user, onLogout }) {
                 <strong>Information Sheet Files:</strong>
                 <ul>
                   {formData.informationSheetFiles.map((file, index) => (
-                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
                   ))}
                 </ul>
               </div>
@@ -223,7 +230,7 @@ function ViewSubmission({ user, onLogout }) {
                 <strong>Consent Form Files:</strong>
                 <ul>
                   {formData.consentFormFiles.map((file, index) => (
-                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
                   ))}
                 </ul>
               </div>
@@ -272,9 +279,51 @@ function ViewSubmission({ user, onLogout }) {
           <h3>Section 5: Ethical Considerations</h3>
           <div className="section-content">
             <p><strong>Previous Ethics Approval:</strong> {formData.previousEthicsApproval || 'N/A'}</p>
+            {formData.previousEthicsApproval === 'Yes' && (
+              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
+                <p><strong>When did you apply?</strong> {formData.previousEthicsApplicationDate || 'N/A'}</p>
+                <p><strong>Was the research project approved?</strong> {formData.previousEthicsProjectApproved || 'N/A'}</p>
+                {formData.ethicsApprovalDocuments && formData.ethicsApprovalDocuments.length > 0 && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <strong>Ethics approval document(s):</strong>
+                    <ul>
+                      {formData.ethicsApprovalDocuments.map((file, index) => (
+                        <li key={index}>{getUploadedFileDisplayName(file)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             <p><strong>Collecting Personal Info:</strong> {formData.collectingPersonalInfo || 'N/A'}</p>
             <p><strong>Collecting from Other Source:</strong> {formData.collectingFromOtherSource || 'N/A'}</p>
+            {formData.collectingFromOtherSource === 'Yes' && (
+              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
+                <p>
+                  <strong>Intend to publish personal information from that source:</strong>{' '}
+                  {formData.intendPublishPersonalInfoFromOtherSource || 'N/A'}
+                </p>
+                {formData.intendPublishPersonalInfoFromOtherSource === 'Yes' && (
+                  <>
+                    <p>
+                      <strong>Form of publication:</strong>
+                    </p>
+                    <p style={{ whiteSpace: 'pre-wrap' }}>
+                      {formData.publishPersonalInfoFromOtherSourceDetails || 'N/A'}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
             <p><strong>Involves Deception:</strong> {formData.involvesDeception || 'N/A'}</p>
+            {formData.involvesDeception === 'Yes' && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <strong>Debriefing procedures:</strong>
+                <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.35rem' }}>
+                  {formData.deceptionDebriefingProcedures || 'N/A'}
+                </p>
+              </div>
+            )}
             <p><strong>Intend to Publish:</strong> {formData.intendToPublish || 'N/A'}</p>
             <p><strong>Blood/Tissue Samples:</strong> {formData.bloodTissueSamples || 'N/A'}</p>
             {formData.bloodTissueSamples === 'Yes' && (
@@ -294,7 +343,7 @@ function ViewSubmission({ user, onLogout }) {
                         <strong>Supporting documents:</strong>
                         <ul>
                           {formData.bloodTissueAbroadDocuments.map((file, index) => (
-                            <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                            <li key={index}>{getUploadedFileDisplayName(file)}</li>
                           ))}
                         </ul>
                       </div>
@@ -360,7 +409,7 @@ function ViewSubmission({ user, onLogout }) {
                 <strong>Sample Size Calculation Files:</strong>
                 <ul>
                   {formData.sampleSizeFiles.map((file, index) => (
-                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
                   ))}
                 </ul>
               </div>
@@ -370,7 +419,7 @@ function ViewSubmission({ user, onLogout }) {
                 <strong>Research Proposal Files:</strong>
                 <ul>
                   {formData.researchProposalFiles.map((file, index) => (
-                    <li key={index}>{file?.name || file?._fileMeta?.name || file}</li>
+                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
                   ))}
                 </ul>
               </div>

@@ -57,7 +57,15 @@ const buildSubmissionFormData = (data) => {
   fd.append('status', data.status || 'draft');
   const formData = data.formData || data;
   const sanitized = { ...formData };
-  const fileFields = ['informationSheetFiles', 'consentFormFiles', 'grantDocuments', 'sampleSizeFiles', 'dataVariablesFiles', 'researchProposalFiles'];
+  const fileFields = [
+    'informationSheetFiles',
+    'consentFormFiles',
+    'grantDocuments',
+    'ethicsApprovalDocuments',
+    'sampleSizeFiles',
+    'dataVariablesFiles',
+    'researchProposalFiles',
+  ];
   for (const field of fileFields) {
     if (Array.isArray(sanitized[field])) {
       const files = sanitized[field].filter((f) => f instanceof File);
