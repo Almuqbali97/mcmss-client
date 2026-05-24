@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPassword } from '../utils/api';
-import './Login.css';
+import AuthLayout from './AuthLayout';
 
 function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -31,53 +31,46 @@ function ForgotPassword() {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <h1>Forgot Password</h1>
-          <p>Medical City for Military and Security Services</p>
+    <AuthLayout title="Forgot Password" subtitle="We'll send you a reset link">
+      <form onSubmit={handleSubmit} className="login-form">
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+
+        <p className="auth-hint">
+          Enter your email address and we'll send you a link to reset your password.
+        </p>
+
+        <div className="form-group">
+          <label htmlFor="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            className="form-control"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Enter your email"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="alert alert-error">{error}</div>}
-          {success && <div className="alert alert-success">{success}</div>}
+        <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+          {loading ? (
+            <span className="btn-loading">
+              <span className="spinner"></span>
+              Sending...
+            </span>
+          ) : (
+            'Send Reset Link'
+          )}
+        </button>
 
-          <p style={{ marginBottom: '1rem', color: '#6c757d', fontSize: '0.9rem' }}>
-            Enter your email address and we'll send you a link to reset your password.
+        <div className="auth-toggle">
+          <p>
+            Remember your password? <Link to="/login" className="link-button">Back to Login</Link>
           </p>
-
-          <div className="form-group">
-            <label htmlFor="email">Email Address</label>
-            <input
-              type="email"
-              id="email"
-              className="form-control"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="Enter your email"
-            />
-          </div>
-
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                <span className="spinner"></span>
-                Sending...
-              </span>
-            ) : (
-              'Send Reset Link'
-            )}
-          </button>
-
-          <div className="auth-toggle">
-            <p>
-              Remember your password? <Link to="/login" className="link-button">Back to Login</Link>
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </AuthLayout>
   );
 }
 

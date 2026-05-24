@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { login, signupStep1, verifySignup, resendSignupOTP } from '../utils/api';
-import './Login.css';
+import { getDefaultRouteForRole } from '../utils/roleRoutes';
+import AuthLayout from './AuthLayout';
 
 function Login({ onLogin }) {
   const [isSignup, setIsSignup] = useState(false);
@@ -31,7 +32,7 @@ function Login({ onLogin }) {
       const result = await login(email, password);
       if (result.success) {
         onLogin(result.user);
-        navigate('/dashboard');
+        navigate(getDefaultRouteForRole(result.user.role));
       } else {
         setError(result.message || 'Invalid credentials');
       }
@@ -94,7 +95,7 @@ function Login({ onLogin }) {
       if (result.success && result.data?.user) {
         const user = { ...result.data.user, id: result.data.user.id || result.data.user._id };
         onLogin(user);
-        navigate('/dashboard');
+        navigate(getDefaultRouteForRole(user.role));
       } else {
         setError(result.message || 'Verification failed. Please try again.');
       }
@@ -149,12 +150,10 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <h1>Research and Studies Committee</h1>
-          <p>Medical City for Military and Security Services</p>
-        </div>
+    <AuthLayout
+      title={isSignup ? (signupStep === 1 ? 'Create Account' : 'Verify Email') : 'Sign In'}
+      subtitle="Access your application portal"
+    >
 
         {isSignup ? (
           signupStep === 1 ? (
@@ -261,7 +260,7 @@ function Login({ onLogin }) {
 
               <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                 {loading ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <span className="btn-loading">
                     <span className="spinner"></span>
                     Sending verification code...
                   </span>
@@ -279,7 +278,7 @@ function Login({ onLogin }) {
               {error && <div className="alert alert-error">{error}</div>}
               {success && <div className="alert alert-success">{success}</div>}
 
-              <p style={{ marginBottom: '1rem', color: '#6c757d', fontSize: '0.9rem' }}>
+              <p className="auth-hint">
                 We sent a 6-digit code to <strong>{email}</strong>
               </p>
 
@@ -301,7 +300,7 @@ function Login({ onLogin }) {
 
               <button type="submit" className="btn btn-primary btn-block" disabled={loading || otp.length !== 6}>
                 {loading ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                  <span className="btn-loading">
                     <span className="spinner"></span>
                     Verifying...
                   </span>
@@ -386,7 +385,7 @@ function Login({ onLogin }) {
 
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
               {loading ? (
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <span className="btn-loading">
                   <span className="spinner"></span>
                   Logging in...
                 </span>
@@ -400,8 +399,7 @@ function Login({ onLogin }) {
             </div>
           </form>
         )}
-      </div>
-    </div>
+    </AuthLayout>
   );
 }
 

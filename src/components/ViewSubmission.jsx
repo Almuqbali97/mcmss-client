@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSubmission, updateFieldComments } from '../utils/api';
+import { getSubmission, updateFieldComments, submitReview } from '../utils/api';
+import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import UserMenu from './UserMenu';
 import './ViewSubmission.css';
 
@@ -30,8 +31,14 @@ function ViewSubmission({ user, onLogout }) {
   const [fieldComments, setFieldComments] = useState({});
   const [savingComments, setSavingComments] = useState(false);
   const [commentsSaved, setCommentsSaved] = useState(false);
+  const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
-  const canComment = (user?.role === 'reviewer' || user?.role === 'admin') && submission?.status === 'under_review';
+  const isReviewer = user?.role === 'reviewer';
+  const canComment = (isReviewer || user?.role === 'admin') && submission?.status === 'under_review';
+  const canSubmitReview = isReviewer && submission?.status === 'under_review';
+  const canEdit = user?.role === 'researcher' && submission?.status === 'draft';
 
   useEffect(() => {
     loadSubmission();
@@ -84,12 +91,36 @@ function ViewSubmission({ user, onLogout }) {
     }
   };
 
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    setReviewError('');
+    if (!reviewDecision.comments.trim()) {
+      setReviewError('Please provide overall review comments before submitting.');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments);
+      setSubmission(updated);
+      navigate(getDefaultRouteForRole(user.role));
+    } catch (error) {
+      setReviewError(error.response?.data?.message || 'Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const backPath = getDefaultRouteForRole(user?.role);
+
   if (loading) {
     return (
-      <div>
+      <div className="app-page">
         <header className="header">
           <div className="header-content">
-            <h1>View Submission</h1>
+            <div className="header-brand">
+              <h1>View Submission</h1>
+              <span className="header-subtitle">Research Ethics Application</span>
+            </div>
             <div className="header-user">
               <UserMenu user={user} onLogout={onLogout} />
             </div>
@@ -104,10 +135,13 @@ function ViewSubmission({ user, onLogout }) {
 
   if (!submission) {
     return (
-      <div>
+      <div className="app-page">
         <header className="header">
           <div className="header-content">
-            <h1>View Submission</h1>
+            <div className="header-brand">
+              <h1>View Submission</h1>
+              <span className="header-subtitle">Research Ethics Application</span>
+            </div>
             <div className="header-user">
               <UserMenu user={user} onLogout={onLogout} />
             </div>
@@ -117,8 +151,8 @@ function ViewSubmission({ user, onLogout }) {
           <div className="card">
             <div className="empty-state">
               <h3>Submission not found</h3>
-              <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>
-                Back to Dashboard
+              <button className="btn btn-primary" onClick={() => navigate(backPath)}>
+                Back to {isReviewer ? 'Review Dashboard' : 'Dashboard'}
               </button>
             </div>
           </div>
@@ -130,20 +164,28 @@ function ViewSubmission({ user, onLogout }) {
   const formData = submission.formData || {};
 
   return (
-    <div>
+    <div className="app-page">
       <header className="header">
         <div className="header-content">
-          <h1>View Submission</h1>
-          <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {submission.status === 'draft' && (
+          <div className="header-brand">
+            <h1>View Submission</h1>
+            <span className="header-subtitle">Research Ethics Application</span>
+          </div>
+          <div className="header-user header-actions">
+            {canEdit && (
               <button
-                className="btn btn-secondary"
+                className="btn-header btn-header--primary"
                 onClick={() => navigate(`/submission/${id}/edit`)}
-                style={{ background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: 'white' }}
               >
                 Edit
               </button>
             )}
+            <button
+              className="btn-header"
+              onClick={() => navigate(backPath)}
+            >
+              Back
+            </button>
             <UserMenu user={user} onLogout={onLogout} />
           </div>
         </div>
@@ -433,6 +475,51 @@ function ViewSubmission({ user, onLogout }) {
             <div className="section-content">
               <p style={{ whiteSpace: 'pre-wrap' }}>{submission.reviewComments}</p>
             </div>
+          </div>
+        )}
+
+        {canSubmitReview && (
+          <div className="card review-decision-card">
+            <h3>Submit Review Decision</h3>
+            <p className="review-decision-hint">
+              Add field-level comments in Section 7 above, then submit your overall decision below.
+            </p>
+            <form onSubmit={handleSubmitReview} className="review-decision-form">
+              {reviewError && <div className="form-error review-decision-error">{reviewError}</div>}
+              <div className="form-group">
+                <label htmlFor="reviewStatus">Decision</label>
+                <select
+                  id="reviewStatus"
+                  className="form-control"
+                  value={reviewDecision.status}
+                  onChange={(e) => setReviewDecision((prev) => ({ ...prev, status: e.target.value }))}
+                >
+                  <option value="approved">Approve</option>
+                  <option value="revisions_required">Request Revisions</option>
+                  <option value="rejected">Reject</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="reviewComments">Overall review comments <span className="required">*</span></label>
+                <textarea
+                  id="reviewComments"
+                  className="form-control"
+                  rows={5}
+                  value={reviewDecision.comments}
+                  onChange={(e) => setReviewDecision((prev) => ({ ...prev, comments: e.target.value }))}
+                  placeholder="Summarize your review decision and any required changes..."
+                  required
+                />
+              </div>
+              <div className="review-decision-actions">
+                <button type="button" className="btn btn-outline" onClick={() => navigate(backPath)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={submittingReview}>
+                  {submittingReview ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>

@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSubmissions, assignReviewer, submitReview, getReviewers, createReviewer, updateReviewer, deleteReviewer, exportSubmission } from '../utils/api';
+import { getSubmissions, assignReviewer, submitReview, getReviewers, createReviewer, updateReviewer, deleteReviewer, exportSubmission, getPublicationFundingApplications, assignPublicationFundingReviewer, submitPublicationFundingReview, exportPublicationFunding } from '../utils/api';
 import UserMenu from './UserMenu';
 import './AdminPanel.css';
 
 function AdminPanel({ user, onLogout }) {
   const navigate = useNavigate();
   const [submissions, setSubmissions] = useState([]);
+  const [publicationApps, setPublicationApps] = useState([]);
+  const [applicationTab, setApplicationTab] = useState('ethics');
   const [reviewers, setReviewers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [selectedApplicationType, setSelectedApplicationType] = useState('ethics');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewData, setReviewData] = useState({ status: 'approved', comments: '' });
@@ -31,11 +34,13 @@ function AdminPanel({ user, onLogout }) {
 
   const loadData = async () => {
     try {
-      const [subsData, revsData] = await Promise.all([
+      const [subsData, pubData, revsData] = await Promise.all([
         getSubmissions(),
+        getPublicationFundingApplications(),
         getReviewers()
       ]);
       setSubmissions(subsData);
+      setPublicationApps(pubData);
       setReviewers(revsData);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -46,7 +51,11 @@ function AdminPanel({ user, onLogout }) {
 
   const handleAssignReviewer = async (submissionId, reviewerId) => {
     try {
-      await assignReviewer(submissionId, reviewerId);
+      if (selectedApplicationType === 'publication') {
+        await assignPublicationFundingReviewer(submissionId, reviewerId);
+      } else {
+        await assignReviewer(submissionId, reviewerId);
+      }
       await loadData();
       setShowAssignModal(false);
       setSelectedSubmission(null);
@@ -63,7 +72,12 @@ function AdminPanel({ user, onLogout }) {
     }
 
     try {
-      await submitReview(selectedSubmission._id || selectedSubmission.id, reviewData.status, reviewData.comments);
+      const id = selectedSubmission._id || selectedSubmission.id;
+      if (selectedApplicationType === 'publication') {
+        await submitPublicationFundingReview(id, reviewData.status, reviewData.comments);
+      } else {
+        await submitReview(id, reviewData.status, reviewData.comments);
+      }
       await loadData();
       setShowReviewModal(false);
       setSelectedSubmission(null);
@@ -74,16 +88,18 @@ function AdminPanel({ user, onLogout }) {
     }
   };
 
-  const handleExport = async (submissionId) => {
+  const handleExport = async (submissionId, type = 'ethics') => {
     try {
-      const data = await exportSubmission(submissionId);
-      const submission = data.submission || data;
-      const json = JSON.stringify(submission, null, 2);
+      const data = type === 'publication'
+        ? await exportPublicationFunding(submissionId)
+        : await exportSubmission(submissionId);
+      const item = data.application || data.submission || data;
+      const json = JSON.stringify(item, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `submission-${submission.submissionId || submissionId}.json`;
+      a.download = `${type === 'publication' ? 'publication-funding' : 'submission'}-${item.applicationId || item.submissionId || submissionId}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -229,8 +245,35 @@ function AdminPanel({ user, onLogout }) {
     rejected: submissions.filter(s => s.status === 'rejected').length
   };
 
+  const filteredPublicationApps = (filterStatus === 'all'
+    ? publicationApps
+    : publicationApps.filter((s) => s.status === filterStatus))
+    .filter((s) => s.status !== 'draft')
+    .filter((s) => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = s.applicantName?.toLowerCase().includes(query);
+        const matchesTitle = s.manuscriptTitle?.toLowerCase().includes(query);
+        const matchesId = (s.applicationId || '').toLowerCase().includes(query);
+        if (!matchesName && !matchesTitle && !matchesId) return false;
+      }
+      if (filterYear) {
+        const year = s.submittedDate ? new Date(s.submittedDate).getFullYear() : null;
+        if (year !== parseInt(filterYear, 10)) return false;
+      }
+      return true;
+    });
+
   const renderApplicationsView = () => (
     <>
+      <div className="dashboard-tabs" style={{ marginBottom: '1rem' }}>
+        <button type="button" className={`dashboard-tab ${applicationTab === 'ethics' ? 'active' : ''}`} onClick={() => setApplicationTab('ethics')}>
+          Ethics Submissions ({submissions.length})
+        </button>
+        <button type="button" className={`dashboard-tab ${applicationTab === 'publication' ? 'active' : ''}`} onClick={() => setApplicationTab('publication')}>
+          Publication Funding ({publicationApps.length})
+        </button>
+      </div>
       <div className="admin-stats">
         <div className="stat-card">
           <div className="stat-value">{stats.total - stats.draft}</div>
@@ -501,7 +544,7 @@ function AdminPanel({ user, onLogout }) {
       <header className="header">
         <div className="header-content">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button 
+            <button
               className="sidebar-toggle-btn"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -509,7 +552,10 @@ function AdminPanel({ user, onLogout }) {
             >
               <span className="toggle-icon">{sidebarCollapsed ? '☰' : '←'}</span>
             </button>
-            <h1>Admin Panel - Research and Studies Committee</h1>
+            <div className="header-brand">
+              <h1>Admin Panel</h1>
+              <span className="header-subtitle">Research and Studies Committee</span>
+            </div>
           </div>
           <div className="header-user">
             <UserMenu user={user} onLogout={onLogout} />

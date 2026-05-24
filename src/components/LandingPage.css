@@ -355,3 +355,107 @@
     padding: 1rem 0.75rem;
   }
 }
+
+.hero-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto 1.75rem;
+}
+
+.landing-forms-section {
+  background: #f5f7fa;
+  padding: 4rem 2rem;
+}
+
+.landing-forms-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-forms-title {
+  color: #2c3e50;
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.landing-forms-subtitle {
+  color: #6c757d;
+  margin-bottom: 2.5rem;
+}
+
+.landing-forms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  text-align: left;
+}
+
+.landing-form-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(61, 40, 58, 0.08);
+  border: 1px solid #e8eaed;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landing-form-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.landing-form-card--ethics::before {
+  background: linear-gradient(90deg, #8b6700, #c9a227);
+}
+
+.landing-form-card--publication::before {
+  background: linear-gradient(90deg, #3d283a, #5a3d52);
+}
+
+.landing-form-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 32px rgba(61, 40, 58, 0.12);
+}
+
+.landing-form-card-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.landing-form-card h3 {
+  color: #2c3e50;
+  font-size: 1.15rem;
+  margin-bottom: 0.75rem;
+}
+
+.landing-form-card p {
+  color: #6c757d;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin-bottom: 1.25rem;
+}
+
+.landing-form-card-link {
+  color: #8b6700;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.landing-form-card--publication .landing-form-card-link {
+  color: #5a3d52;
+}
+
+.landing-form-card-link:hover {
+  text-decoration: underline;
+}

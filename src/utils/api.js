@@ -219,3 +219,94 @@ export const exportSubmission = async (id) => {
   const response = await api.get(`/submissions/${id}/export`, { responseType: 'json' });
   return getData(response);
 };
+
+const PF_FILE_FIELDS = [
+  'frontPageOrArticleFiles',
+  'proofOfPaymentFiles',
+  'acceptanceLetterFiles',
+  'publishedArticleFiles',
+  'invoiceReceiptFiles',
+  'irbApprovalFiles',
+  'copeDoajProofFiles',
+  'additionalSupportingFiles',
+];
+
+const buildPublicationFundingFormData = (data) => {
+  const fd = new FormData();
+  fd.append('manuscriptTitle', data.manuscriptTitle || '');
+  fd.append('applicantName', data.applicantName || '');
+  fd.append('status', data.status || 'draft');
+  const formData = data.formData || data;
+  const sanitized = { ...formData };
+  for (const field of PF_FILE_FIELDS) {
+    if (Array.isArray(sanitized[field])) {
+      const files = sanitized[field].filter((f) => f instanceof File);
+      const existing = sanitized[field].filter((f) => !(f instanceof File));
+      sanitized[field] = existing;
+      for (const file of files) {
+        fd.append(field, file);
+      }
+    }
+  }
+  fd.append('formDataJson', JSON.stringify(sanitized));
+  return fd;
+};
+
+export const getPublicationFundingApplications = async (status) => {
+  const response = await api.get('/publication-funding', status ? { params: { status } } : {});
+  return getData(response);
+};
+
+export const getPublicationFunding = async (id) => {
+  const response = await api.get(`/publication-funding/${id}`);
+  return getData(response);
+};
+
+export const createPublicationFunding = async (data) => {
+  const payload = typeof data.formData !== 'undefined' ? { ...data, formData: data.formData } : data;
+  const hasFiles = hasFileObjects(payload.formData || payload);
+  if (hasFiles) {
+    const formData = buildPublicationFundingFormData(payload);
+    const response = await api.post('/publication-funding', formData);
+    return getData(response);
+  }
+  const response = await api.post('/publication-funding', payload);
+  return getData(response);
+};
+
+export const updatePublicationFunding = async (id, data) => {
+  const payload = typeof data.formData !== 'undefined' ? { ...data, formData: data.formData } : data;
+  const hasFiles = hasFileObjects(payload.formData || payload);
+  if (hasFiles) {
+    const formData = buildPublicationFundingFormData(payload);
+    const response = await api.put(`/publication-funding/${id}`, formData);
+    return getData(response);
+  }
+  const response = await api.put(`/publication-funding/${id}`, payload);
+  return getData(response);
+};
+
+export const submitPublicationFundingForReview = async (id) => {
+  const response = await api.post(`/publication-funding/${id}/submit`);
+  return getData(response);
+};
+
+export const assignPublicationFundingReviewer = async (id, reviewerId) => {
+  const response = await api.post(`/publication-funding/${id}/assign-reviewer`, { reviewerId });
+  return getData(response);
+};
+
+export const submitPublicationFundingReview = async (id, status, comments) => {
+  const response = await api.post(`/publication-funding/${id}/review`, { status, comments });
+  return getData(response);
+};
+
+export const updateCommitteeReview = async (id, committeeReview) => {
+  const response = await api.patch(`/publication-funding/${id}/committee-review`, { committeeReview });
+  return getData(response);
+};
+
+export const exportPublicationFunding = async (id) => {
+  const response = await api.get(`/publication-funding/${id}/export`, { responseType: 'json' });
+  return getData(response);
+};

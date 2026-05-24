@@ -2169,10 +2169,13 @@ function SubmissionForm({ user, onLogout }) {
   }
 
   return (
-    <div>
+    <div className="app-page">
       <header className="header">
         <div className="header-content">
-          <h1>Research Ethics Submission Form</h1>
+          <div className="header-brand">
+            <h1>Research Ethics Submission</h1>
+            <span className="header-subtitle">Multi-step application form</span>
+          </div>
           <div className="header-user">
             <UserMenu user={user} onLogout={onLogout} />
           </div>

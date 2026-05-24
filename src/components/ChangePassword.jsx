@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { changePassword } from '../utils/api';
-import './Login.css';
+import AuthLayout from './AuthLayout';
 
 function ChangePassword({ user, onLogout }) {
   const navigate = useNavigate();
@@ -49,20 +49,14 @@ function ChangePassword({ user, onLogout }) {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <h1>Change Password</h1>
-          <p>Medical City for Military and Security Services</p>
-        </div>
+    <AuthLayout title="Change Password" subtitle="Update your account credentials">
+      <form onSubmit={handleSubmit} className="login-form">
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
 
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="alert alert-error">{error}</div>}
-          {success && <div className="alert alert-success">{success}</div>}
-
-          <p style={{ marginBottom: '1rem', color: '#6c757d', fontSize: '0.9rem' }}>
-            Enter your current password and choose a new password.
-          </p>
+        <p className="auth-hint">
+          Enter your current password and choose a new password.
+        </p>
 
           <div className="form-group">
             <label htmlFor="currentPassword">Current Password</label>
@@ -152,7 +146,7 @@ function ChangePassword({ user, onLogout }) {
 
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
             {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <span className="btn-loading">
                 <span className="spinner"></span>
                 Changing...
               </span>
@@ -169,8 +163,7 @@ function ChangePassword({ user, onLogout }) {
             </p>
           </div>
         </form>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }
 
