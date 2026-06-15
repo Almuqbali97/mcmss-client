@@ -1,4 +1,4 @@
-import { PF_FILE_FIELDS } from './formData.js';
+import { PF_FILE_FIELDS, ATTACHMENT_ITEMS } from './formData.js';
 
 export function sanitizeFormData(data) {
   if (!data) return data;
@@ -62,14 +62,20 @@ export function validateStep(step, formData) {
         formData.phone?.trim()
       );
     case 2:
-      return (
-        formData.manuscriptTitle?.trim() &&
-        formData.journalName?.trim() &&
-        formData.dateOfAcceptance &&
-        formData.scopusIndexed &&
-        formData.journalQuartile &&
-        formData.quartileSource
-      );
+      if (
+        !formData.manuscriptTitle?.trim() ||
+        !formData.journalName?.trim() ||
+        !formData.dateOfAcceptance ||
+        !formData.scopusIndexed ||
+        !formData.journalQuartile ||
+        !formData.quartileSource
+      ) {
+        return false;
+      }
+      if (formData.quartileSource === 'Other' && !formData.quartileSourceOther?.trim()) {
+        return false;
+      }
+      return true;
     case 3:
       return formData.applicantRole?.length > 0 && formData.mcmssAffiliationStated;
     case 4:
@@ -96,10 +102,31 @@ export function validateStep(step, formData) {
       return true;
     case 6:
       return formData.totalRequestedAmount?.trim() && formData.dateOfPayment;
-    case 7:
-      return Object.values(formData.eligibilityChecklist || {}).every(Boolean);
-    case 8:
+    case 7: {
+      const checklistValid = Object.values(formData.eligibilityChecklist || {}).every(Boolean);
+      if (!checklistValid) return false;
+      if (formData.eligibilityChecklist?.frontPageAttached) {
+        const frontPageFiles = formData.frontPageOrArticleFiles || [];
+        if (frontPageFiles.length === 0) return false;
+      }
+      if (formData.eligibilityChecklist?.proofOfPaymentAttached) {
+        const paymentFiles = [...(formData.proofOfPaymentFiles || []), ...(formData.invoiceReceiptFiles || [])];
+        if (paymentFiles.length === 0) return false;
+      }
       return true;
+    }
+    case 8: {
+      for (const { key, files } of ATTACHMENT_ITEMS) {
+        if (formData.attachmentChecklist?.[key] && (!formData[files] || formData[files].length === 0)) {
+          return false;
+        }
+      }
+      if (formData.priorEthicalApproval === 'Yes') {
+        const irbFiles = formData.irbApprovalFiles || [];
+        if (irbFiles.length === 0) return false;
+      }
+      return true;
+    }
     case 9:
       return (
         formData.applicantDeclarationName?.trim() &&

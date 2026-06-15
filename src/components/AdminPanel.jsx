@@ -189,17 +189,25 @@ function AdminPanel({ user, onLogout }) {
     });
   };
 
-  // Get available years from submissions
-  const getAvailableYears = () => {
+  // Get available years from the active application list
+  const getAvailableYears = (items) => {
     const years = new Set();
-    submissions.forEach(s => {
+    items.forEach((s) => {
       if (s.submittedDate) {
-        const year = new Date(s.submittedDate).getFullYear();
-        years.add(year);
+        years.add(new Date(s.submittedDate).getFullYear());
       }
     });
     return Array.from(years).sort((a, b) => b - a);
   };
+
+  const computeStats = (items) => ({
+    total: items.length,
+    draft: items.filter((s) => s.status === 'draft').length,
+    under_review: items.filter((s) => s.status === 'under_review').length,
+    approved: items.filter((s) => s.status === 'approved').length,
+    revisions_required: items.filter((s) => s.status === 'revisions_required').length,
+    rejected: items.filter((s) => s.status === 'rejected').length,
+  });
 
   const filteredSubmissions = (filterStatus === 'all' 
     ? submissions 
@@ -236,15 +244,6 @@ function AdminPanel({ user, onLogout }) {
       return true;
     });
 
-  const stats = {
-    total: submissions.length,
-    draft: submissions.filter(s => s.status === 'draft').length,
-    under_review: submissions.filter(s => s.status === 'under_review').length,
-    approved: submissions.filter(s => s.status === 'approved').length,
-    revisions_required: submissions.filter(s => s.status === 'revisions_required').length,
-    rejected: submissions.filter(s => s.status === 'rejected').length
-  };
-
   const filteredPublicationApps = (filterStatus === 'all'
     ? publicationApps
     : publicationApps.filter((s) => s.status === filterStatus))
@@ -261,8 +260,37 @@ function AdminPanel({ user, onLogout }) {
         const year = s.submittedDate ? new Date(s.submittedDate).getFullYear() : null;
         if (year !== parseInt(filterYear, 10)) return false;
       }
+      if (filterPeriod !== 'all' && s.submittedDate) {
+        const submissionDate = new Date(s.submittedDate);
+        const now = new Date();
+        const daysDiff = Math.floor((now - submissionDate) / (1000 * 60 * 60 * 24));
+        if (filterPeriod === 'today' && daysDiff !== 0) return false;
+        if (filterPeriod === 'week' && daysDiff > 7) return false;
+        if (filterPeriod === 'month' && daysDiff > 30) return false;
+        if (filterPeriod === 'quarter' && daysDiff > 90) return false;
+        if (filterPeriod === 'year' && daysDiff > 365) return false;
+      }
       return true;
     });
+
+  const stats = computeStats(submissions);
+  const publicationStats = computeStats(publicationApps);
+  const isPublicationTab = applicationTab === 'publication';
+  const activeList = isPublicationTab ? filteredPublicationApps : filteredSubmissions;
+  const activeStats = isPublicationTab ? publicationStats : stats;
+  const activeYears = getAvailableYears(isPublicationTab ? publicationApps : submissions);
+
+  const openAssignModal = (item, type) => {
+    setSelectedApplicationType(type);
+    setSelectedSubmission(item);
+    setShowAssignModal(true);
+  };
+
+  const openReviewModal = (item, type) => {
+    setSelectedApplicationType(type);
+    setSelectedSubmission(item);
+    setShowReviewModal(true);
+  };
 
   const renderApplicationsView = () => (
     <>
@@ -276,23 +304,23 @@ function AdminPanel({ user, onLogout }) {
       </div>
       <div className="admin-stats">
         <div className="stat-card">
-          <div className="stat-value">{stats.total - stats.draft}</div>
-          <div className="stat-label">Total Submissions</div>
+          <div className="stat-value">{activeStats.total - activeStats.draft}</div>
+          <div className="stat-label">{isPublicationTab ? 'Total Applications' : 'Total Submissions'}</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.under_review}</div>
+          <div className="stat-value">{activeStats.under_review}</div>
           <div className="stat-label">Under Review</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.approved}</div>
+          <div className="stat-value">{activeStats.approved}</div>
           <div className="stat-label">Approved</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.revisions_required}</div>
+          <div className="stat-value">{activeStats.revisions_required}</div>
           <div className="stat-label">Revisions Required</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.rejected}</div>
+          <div className="stat-value">{activeStats.rejected}</div>
           <div className="stat-label">Rejected</div>
         </div>
       </div>
@@ -310,7 +338,7 @@ function AdminPanel({ user, onLogout }) {
               <input
                 type="text"
                 className="form-control search-input"
-                placeholder="Search by ID, name, email, or title..."
+                placeholder={isPublicationTab ? 'Search by ID, applicant, or title...' : 'Search by ID, name, email, or title...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -337,7 +365,7 @@ function AdminPanel({ user, onLogout }) {
                 onChange={(e) => setFilterYear(e.target.value)}
               >
                 <option value="">All Years</option>
-                {getAvailableYears().map(year => (
+                {activeYears.map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>
@@ -361,11 +389,73 @@ function AdminPanel({ user, onLogout }) {
         </div>
 
         {loading ? (
-          <div className="loading">Loading submissions...</div>
-        ) : filteredSubmissions.length === 0 ? (
+          <div className="loading">Loading applications...</div>
+        ) : activeList.length === 0 ? (
           <div className="empty-state">
-            <h3>No submissions found</h3>
+            <h3>No {isPublicationTab ? 'applications' : 'submissions'} found</h3>
           </div>
+        ) : isPublicationTab ? (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Manuscript Title</th>
+                <th>Applicant</th>
+                <th>Status</th>
+                <th>Submitted Date</th>
+                <th>Assigned Reviewer</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeList.map((app) => (
+                <tr key={app._id || app.id}>
+                  <td>{app.applicationId}</td>
+                  <td>{app.manuscriptTitle || 'Untitled'}</td>
+                  <td>{app.applicantName}</td>
+                  <td>
+                    <span className={getStatusClass(app.status)}>
+                      {app.status.replaceAll('_', ' ').toUpperCase()}
+                    </span>
+                  </td>
+                  <td>{formatDate(app.submittedDate)}</td>
+                  <td>{app.assignedReviewer || <span style={{ color: '#6c757d' }}>Not assigned</span>}</td>
+                  <td>
+                    <div className="action-buttons">
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => navigate(`/publication-funding/${app._id || app.id}`)}
+                      >
+                        View
+                      </button>
+                      {app.status === 'under_review' && !app.assignedReviewer && (
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => openAssignModal(app, 'publication')}
+                        >
+                          Assign Reviewer
+                        </button>
+                      )}
+                      {app.status === 'under_review' && app.assignedReviewer && (
+                        <button
+                          className="btn btn-success"
+                          onClick={() => openReviewModal(app, 'publication')}
+                        >
+                          Review
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handleExport(app._id || app.id, 'publication')}
+                      >
+                        Export
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
           <table className="table">
             <thead>
@@ -387,7 +477,7 @@ function AdminPanel({ user, onLogout }) {
                   <td>{submission.principalInvestigator}</td>
                   <td>
                     <span className={getStatusClass(submission.status)}>
-                      {submission.status.replace('_', ' ').toUpperCase()}
+                      {submission.status.replaceAll('_', ' ').toUpperCase()}
                     </span>
                   </td>
                   <td>{formatDate(submission.submittedDate)}</td>
@@ -403,10 +493,7 @@ function AdminPanel({ user, onLogout }) {
                       {submission.status === 'under_review' && !submission.assignedReviewer && (
                         <button
                           className="btn btn-primary"
-                          onClick={() => {
-                            setSelectedSubmission(submission);
-                            setShowAssignModal(true);
-                          }}
+                          onClick={() => openAssignModal(submission, 'ethics')}
                         >
                           Assign Reviewer
                         </button>
@@ -414,10 +501,7 @@ function AdminPanel({ user, onLogout }) {
                       {submission.status === 'under_review' && submission.assignedReviewer && (
                         <button
                           className="btn btn-success"
-                          onClick={() => {
-                            setSelectedSubmission(submission);
-                            setShowReviewModal(true);
-                          }}
+                          onClick={() => openReviewModal(submission, 'ethics')}
                         >
                           Review
                         </button>
@@ -616,7 +700,11 @@ function AdminPanel({ user, onLogout }) {
         <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Assign Reviewer</h3>
-            <p><strong>Research:</strong> {selectedSubmission.researchTitle}</p>
+            <p><strong>{selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:</strong>{' '}
+              {selectedApplicationType === 'publication'
+                ? selectedSubmission.manuscriptTitle
+                : selectedSubmission.researchTitle}
+            </p>
             <div className="form-group">
               <label>Select Reviewer</label>
               <select
@@ -649,7 +737,11 @@ function AdminPanel({ user, onLogout }) {
         <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Submit Review</h3>
-            <p><strong>Research:</strong> {selectedSubmission.researchTitle}</p>
+            <p><strong>{selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:</strong>{' '}
+              {selectedApplicationType === 'publication'
+                ? selectedSubmission.manuscriptTitle
+                : selectedSubmission.researchTitle}
+            </p>
             <div className="form-group">
               <label>Review Status <span className="required">*</span></label>
               <select

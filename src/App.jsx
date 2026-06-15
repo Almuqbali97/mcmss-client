@@ -20,8 +20,13 @@ function App() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+    const accessToken = localStorage.getItem('accessToken');
+    if (savedUser && accessToken) {
       setUser(JSON.parse(savedUser));
+    } else {
+      localStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     }
   }, []);
 

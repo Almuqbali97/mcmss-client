@@ -25,6 +25,8 @@ const FORM_TYPES = [
   },
 ];
 
+const EDITABLE_STATUSES = ['draft', 'revisions_required'];
+
 function FormTypeCard({ form, count, onStart, onViewApplications }) {
   return (
     <article className={`form-type-card form-type-card--${form.accent}`}>
@@ -137,8 +139,10 @@ function Dashboard({ user, onLogout }) {
                 {isReviewer && submission.status === 'under_review' && (
                   <button className="btn btn-primary" onClick={() => navigate(`/submission/${submission._id || submission.id}`)}>Review</button>
                 )}
-                {!isReviewer && submission.status === 'draft' && (
-                  <button className="btn btn-secondary" onClick={() => navigate(`/submission/${submission._id || submission.id}/edit`)}>Edit</button>
+                {!isReviewer && EDITABLE_STATUSES.includes(submission.status) && (
+                  <button className="btn btn-secondary" onClick={() => navigate(`/submission/${submission._id || submission.id}/edit`)}>
+                    {submission.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                  </button>
                 )}
               </div>
             </td>
@@ -179,8 +183,10 @@ function Dashboard({ user, onLogout }) {
                 {isReviewer && app.status === 'under_review' && (
                   <button className="btn btn-primary" onClick={() => navigate(`/publication-funding/${app._id || app.id}`)}>Review</button>
                 )}
-                {!isReviewer && app.status === 'draft' && (
-                  <button className="btn btn-secondary" onClick={() => navigate(`/publication-funding/${app._id || app.id}/edit`)}>Edit</button>
+                {!isReviewer && EDITABLE_STATUSES.includes(app.status) && (
+                  <button className="btn btn-secondary" onClick={() => navigate(`/publication-funding/${app._id || app.id}/edit`)}>
+                    {app.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                  </button>
                 )}
               </div>
             </td>

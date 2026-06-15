@@ -21,6 +21,8 @@ function ViewField({ label, value }) {
   return <p><strong>{label}:</strong> {value || 'N/A'}</p>;
 }
 
+const EDITABLE_STATUSES = ['draft', 'revisions_required'];
+
 function ViewPublicationFunding({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -35,7 +37,7 @@ function ViewPublicationFunding({ user, onLogout }) {
   const isAdmin = user?.role === 'admin';
   const fd = application?.formData || {};
   const backPath = getDefaultRouteForRole(user?.role);
-  const canSubmitReview = isReviewer && application?.status === 'under_review';
+  const canSubmitReview = (isReviewer || isAdmin) && application?.status === 'under_review';
 
   useEffect(() => {
     loadApplication();
@@ -92,12 +94,12 @@ function ViewPublicationFunding({ user, onLogout }) {
           <span className="header-subtitle">{subtitle}</span>
         </div>
         <div className="header-user header-actions">
-          {application && application.status === 'draft' && user?.role === 'researcher' && (
+          {application && EDITABLE_STATUSES.includes(application.status) && user?.role === 'researcher' && (
             <button
               className="btn-header btn-header--primary"
               onClick={() => navigate(`/publication-funding/${id}/edit`)}
             >
-              Edit
+              {application.status === 'revisions_required' ? 'Revise' : 'Edit'}
             </button>
           )}
           <button
@@ -170,6 +172,25 @@ function ViewPublicationFunding({ user, onLogout }) {
           <ViewField label="Journal quartile" value={fd.journalQuartile} />
           <ViewField label="Impact factor" value={fd.impactFactor} />
           <ViewField label="Quartile source" value={fd.quartileSource} />
+          {fd.quartileSource === 'Other' && (
+            <ViewField label="Other quartile source" value={fd.quartileSourceOther} />
+          )}
+          {(fd.frontPageOrArticleFiles || []).length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <p><strong>Front page / article files</strong></p>
+              <ul>
+                {fd.frontPageOrArticleFiles.map((file, i) => (
+                  <li key={i}>
+                    {file.path ? (
+                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${file.path}`} target="_blank" rel="noreferrer">
+                        {getFileName(file)}
+                      </a>
+                    ) : getFileName(file)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -196,6 +217,9 @@ function ViewPublicationFunding({ user, onLogout }) {
           <ViewField label="Approving institution" value={fd.approvingInstitution} />
           <ViewField label="Approval date" value={fd.ethicsApprovalDate} />
           <ViewField label="Reason if not required" value={fd.ethicsNotRequiredReason} />
+          {fd.ethicsNotRequiredReason === 'Other' && (
+            <ViewField label="Other reason" value={fd.ethicsNotRequiredOther} />
+          )}
         </div>
 
         <div className="card">
@@ -219,6 +243,22 @@ function ViewPublicationFunding({ user, onLogout }) {
           </table>
           <ViewField label="Total requested" value={fd.totalRequestedAmount} />
           <ViewField label="Date of payment" value={fd.dateOfPayment} />
+          {(fd.proofOfPaymentFiles || []).length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <p><strong>Proof of payment files</strong></p>
+              <ul>
+                {fd.proofOfPaymentFiles.map((file, i) => (
+                  <li key={i}>
+                    {file.path ? (
+                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${file.path}`} target="_blank" rel="noreferrer">
+                        {getFileName(file)}
+                      </a>
+                    ) : getFileName(file)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="card">
