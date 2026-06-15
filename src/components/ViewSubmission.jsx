@@ -23,7 +23,7 @@ function getUploadedFileDisplayName(file) {
   return file.name || file.originalName || file._fileMeta?.name || 'File';
 }
 
-const API_ORIGIN = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
+import { API_ORIGIN } from '../utils/apiConfig.js';
 
 function renderFileList(files) {
   if (!files?.length) return null;

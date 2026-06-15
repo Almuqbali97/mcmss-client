@@ -7,6 +7,7 @@ import {
 } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import { ELIGIBILITY_ITEMS, ATTACHMENT_ITEMS, FUNDING_ITEMS } from './publicationFunding/formData';
+import { API_ORIGIN } from '../utils/apiConfig.js';
 import UserMenu from './UserMenu';
 import './ViewSubmission.css';
 import './Dashboard.css';
@@ -182,7 +183,7 @@ function ViewPublicationFunding({ user, onLogout }) {
                 {fd.frontPageOrArticleFiles.map((file, i) => (
                   <li key={i}>
                     {file.path ? (
-                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${file.path}`} target="_blank" rel="noreferrer">
+                      <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
                         {getFileName(file)}
                       </a>
                     ) : getFileName(file)}
@@ -250,7 +251,7 @@ function ViewPublicationFunding({ user, onLogout }) {
                 {fd.proofOfPaymentFiles.map((file, i) => (
                   <li key={i}>
                     {file.path ? (
-                      <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${file.path}`} target="_blank" rel="noreferrer">
+                      <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
                         {getFileName(file)}
                       </a>
                     ) : getFileName(file)}
@@ -280,7 +281,7 @@ function ViewPublicationFunding({ user, onLogout }) {
                   {(fd[files] || []).map((file, i) => (
                     <li key={i}>
                       {file.path ? (
-                        <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'}${file.path}`} target="_blank" rel="noreferrer">
+                        <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
                           {getFileName(file)}
                         </a>
                       ) : getFileName(file)}
