@@ -255,8 +255,7 @@ function ViewSubmission({ user, onLogout }) {
           <h3>Section 3: Project Description</h3>
           <div className="section-content">
             <p><strong>Research Type:</strong> {formData.researchType?.join(', ') || 'N/A'}</p>
-            <p><strong>Data Collection Type:</strong> {formData.dataCollectionType || 'N/A'}</p>
-            <p><strong>Information Sheet:</strong> {formData.informationSheet || 'N/A'}</p>
+            <p><strong>Study Involvement:</strong> {formData.studyInvolves?.join('; ') || 'N/A'}</p>
             {formData.informationSheetFiles && formData.informationSheetFiles.length > 0 && (
               <div>
                 <strong>Information Sheet Files:</strong>
@@ -325,7 +324,7 @@ function ViewSubmission({ user, onLogout }) {
               <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
                 <p><strong>When did you apply?</strong> {formData.previousEthicsApplicationDate || 'N/A'}</p>
                 <p><strong>Was the research project approved?</strong> {formData.previousEthicsProjectApproved || 'N/A'}</p>
-                {formData.ethicsApprovalDocuments && formData.ethicsApprovalDocuments.length > 0 && (
+                {formData.previousEthicsProjectApproved === 'Yes' && formData.ethicsApprovalDocuments && formData.ethicsApprovalDocuments.length > 0 && (
                   <div style={{ marginTop: '0.5rem' }}>
                     <strong>Ethics approval document(s):</strong>
                     <ul>

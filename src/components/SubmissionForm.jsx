@@ -82,8 +82,7 @@ function SubmissionForm({ user, onLogout }) {
     supervisorName: '',
     supervisorSignature: '',
     researchType: [],
-    dataCollectionType: '',
-    informationSheet: '',
+    studyInvolves: [],
     researcherContactName: '',
     researcherContactDepartment: '',
     researcherContactTelephone: '',
@@ -236,6 +235,7 @@ function SubmissionForm({ user, onLogout }) {
           bloodTissueAbroadInstitution: fd.bloodTissueAbroadInstitution ?? '',
           bloodTissueAbroadCountry: fd.bloodTissueAbroadCountry ?? '',
           bloodTissueDiscardExplanation: fd.bloodTissueDiscardExplanation ?? '',
+          studyInvolves: Array.isArray(fd.studyInvolves) ? fd.studyInvolves : [],
           bloodTissueAbroadDocuments: Array.isArray(fd.bloodTissueAbroadDocuments)
             ? fd.bloodTissueAbroadDocuments
             : [],
@@ -279,6 +279,19 @@ function SubmissionForm({ user, onLogout }) {
           ? [...prev.researchType, value]
           : prev.researchType.filter(t => t !== value)
       }));
+    } else if (field === 'studyInvolves') {
+      setFormData(prev => {
+        if (value === 'None of the above') {
+          return { ...prev, studyInvolves: checked ? ['None of the above'] : [] };
+        }
+        const withoutNone = prev.studyInvolves.filter(v => v !== 'None of the above');
+        return {
+          ...prev,
+          studyInvolves: checked
+            ? [...withoutNone, value]
+            : withoutNone.filter(v => v !== value)
+        };
+      });
     }
   };
 
@@ -357,7 +370,7 @@ function SubmissionForm({ user, onLogout }) {
         }
         return baseValid;
       case 3: {
-        const base = formData.researchType.length > 0 && formData.dataCollectionType;
+        const base = formData.researchType.length > 0 && formData.studyInvolves.length > 0;
         if (!base) return false;
         let project = formData.proposedStartDate && formData.duration && formData.multiCenterResearch && formData.fundingSource;
         if (project && formData.multiCenterResearch === 'Yes') {
@@ -377,7 +390,8 @@ function SubmissionForm({ user, onLogout }) {
         if (formData.fundingSource && formData.fundingSource !== 'Self-Funding') {
           if (!formData.grantSum || !formData.grantStartDate || !formData.grantEndDate || formData.grantDocuments.length === 0) return false;
         }
-        if (formData.dataCollectionType === 'Prospective') {
+        const requiresParticipantDocs = formData.studyInvolves.some(v => v !== 'None of the above');
+        if (requiresParticipantDocs) {
           return project &&
             formData.researcherContactName && formData.researcherContactDepartment &&
             formData.researcherContactTelephone && formData.researcherContactEmail &&
@@ -394,13 +408,8 @@ function SubmissionForm({ user, onLogout }) {
           formData.intendToPublish && formData.bloodTissueSamples;
         if (!base5) return false;
         if (formData.previousEthicsApproval === 'Yes') {
-          if (
-            !formData.previousEthicsApplicationDate ||
-            !formData.previousEthicsProjectApproved ||
-            !formData.ethicsApprovalDocuments?.length
-          ) {
-            return false;
-          }
+          if (!formData.previousEthicsApplicationDate || !formData.previousEthicsProjectApproved) return false;
+          if (formData.previousEthicsProjectApproved === 'Yes' && !formData.ethicsApprovalDocuments?.length) return false;
         }
         if (formData.collectingFromOtherSource === 'Yes') {
           if (!formData.intendPublishPersonalInfoFromOtherSource) return false;
@@ -939,34 +948,29 @@ function SubmissionForm({ user, onLogout }) {
               </div>
             </div>
             <div className="form-group">
-              <label>Type of Data Collection <span className="required">*</span></label>
-              <div className="radio-group">
-                <div className="radio-item">
-                  <input
-                    type="radio"
-                    id="prospective"
-                    name="dataCollectionType"
-                    value="Prospective"
-                    checked={formData.dataCollectionType === 'Prospective'}
-                    onChange={(e) => handleChange('dataCollectionType', e.target.value)}
-                  />
-                  <label htmlFor="prospective">Prospective</label>
-                </div>
-                <div className="radio-item">
-                  <input
-                    type="radio"
-                    id="retrospective"
-                    name="dataCollectionType"
-                    value="Retrospective"
-                    checked={formData.dataCollectionType === 'Retrospective'}
-                    onChange={(e) => handleChange('dataCollectionType', e.target.value)}
-                  />
-                  <label htmlFor="retrospective">Retrospective</label>
-                </div>
+              <label>Will this study involve any of the following, beyond routine clinical care? <span className="required">*</span></label>
+              <p style={{ fontSize: '0.9rem', color: '#6c757d', marginBottom: '0.5rem' }}>(tick all that apply)</p>
+              <div className="checkbox-group">
+                {[
+                  'Direct interaction with patients or caregivers specifically for research (e.g., questionnaires, interviews, extra examinations)',
+                  'Collection of new biological samples for research (e.g., extra blood, tissue, saliva)',
+                  'Use of identifiable patient information from medical records specifically for research (not just fully anonymized data)',
+                  'None of the above'
+                ].map((option) => (
+                  <div className="checkbox-item" key={option}>
+                    <input
+                      type="checkbox"
+                      id={`studyInvolves_${option}`}
+                      checked={formData.studyInvolves.includes(option)}
+                      onChange={(e) => handleCheckboxChange('studyInvolves', option, e.target.checked)}
+                    />
+                    <label htmlFor={`studyInvolves_${option}`}>{option}</label>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {formData.dataCollectionType === 'Prospective' && (
+            {formData.studyInvolves.some(v => v !== 'None of the above') && (
               <>
                 <h3 style={{ marginTop: '2rem' }}>Information Sheet Requirements</h3>
                 <div className="info-box">
@@ -1039,16 +1043,6 @@ function SubmissionForm({ user, onLogout }) {
                 </div>
                 <div className="info-box" style={{ marginTop: '0.5rem' }}>
                   <p><strong>The Information Sheet must conclude with the statement:</strong> "The Medical City For Military and Security Services Research Committee has reviewed and approved this project."</p>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="informationSheet">Information Sheet Content</label>
-                  <textarea
-                    id="informationSheet"
-                    className="form-control"
-                    value={formData.informationSheet}
-                    onChange={(e) => handleChange('informationSheet', e.target.value)}
-                    placeholder="Enter information sheet content or description"
-                  />
                 </div>
                 <div className="form-group">
                   <label>Please upload the information sheet <span className="required">*</span></label>
@@ -1477,12 +1471,13 @@ function SubmissionForm({ user, onLogout }) {
                         name="previousEthicsProjectApproved"
                         value="No"
                         checked={formData.previousEthicsProjectApproved === 'No'}
-                        onChange={(e) => handleChange('previousEthicsProjectApproved', e.target.value)}
+                        onChange={() => setFormData(prev => ({ ...prev, previousEthicsProjectApproved: 'No', ethicsApprovalDocuments: [] }))}
                       />
                       <label htmlFor="previousEthicsProjectApprovedNo">No</label>
                     </div>
                   </div>
                 </div>
+                {formData.previousEthicsProjectApproved === 'Yes' && (
                 <div className="form-group">
                   <label>
                     Please attach a copy of ethics approval(s) obtained. <span className="required">*</span>
@@ -1518,6 +1513,7 @@ function SubmissionForm({ user, onLogout }) {
                     </div>
                   )}
                 </div>
+                )}
               </>
             )}
             <div className="form-group">

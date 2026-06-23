@@ -27,6 +27,7 @@ function AdminPanel({ user, onLogout }) {
   const [selectedReviewer, setSelectedReviewer] = useState(null);
   const [reviewerForm, setReviewerForm] = useState({ name: '', email: '', specialization: '' });
   const [reviewerFormError, setReviewerFormError] = useState('');
+  const [selectedAssignReviewerId, setSelectedAssignReviewerId] = useState('');
 
   useEffect(() => {
     loadData();
@@ -613,7 +614,7 @@ function AdminPanel({ user, onLogout }) {
 
       {/* Assign Reviewer Modal */}
       {showAssignModal && selectedSubmission && (
-        <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Assign Reviewer</h3>
             <p><strong>Research:</strong> {selectedSubmission.researchTitle}</p>
@@ -621,11 +622,8 @@ function AdminPanel({ user, onLogout }) {
               <label>Select Reviewer</label>
               <select
                 className="form-control"
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleAssignReviewer(selectedSubmission._id || selectedSubmission.id, e.target.value);
-                  }
-                }}
+                value={selectedAssignReviewerId}
+                onChange={(e) => setSelectedAssignReviewerId(e.target.value)}
               >
                 <option value="">Select a reviewer...</option>
                 {reviewers.map((reviewer) => (
@@ -636,8 +634,18 @@ function AdminPanel({ user, onLogout }) {
               </select>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowAssignModal(false)}>
+              <button className="btn btn-secondary" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
                 Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={!selectedAssignReviewerId}
+                onClick={() => {
+                  handleAssignReviewer(selectedSubmission._id || selectedSubmission.id, selectedAssignReviewerId);
+                  setSelectedAssignReviewerId('');
+                }}
+              >
+                Confirm
               </button>
             </div>
           </div>
