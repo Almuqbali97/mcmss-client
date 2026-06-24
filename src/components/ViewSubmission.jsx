@@ -23,6 +23,29 @@ function getUploadedFileDisplayName(file) {
   return file.name || file.originalName || file._fileMeta?.name || 'File';
 }
 
+import { API_ORIGIN } from '../utils/apiConfig.js';
+
+function renderFileList(files) {
+  if (!files?.length) return null;
+  return (
+    <ul>
+      {files.map((file, index) => (
+        <li key={index}>
+          {file.path ? (
+            <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
+              {getUploadedFileDisplayName(file)}
+            </a>
+          ) : (
+            getUploadedFileDisplayName(file)
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const EDITABLE_STATUSES = ['draft', 'revisions_required'];
+
 function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -37,8 +60,8 @@ function ViewSubmission({ user, onLogout }) {
 
   const isReviewer = user?.role === 'reviewer';
   const canComment = (isReviewer || user?.role === 'admin') && submission?.status === 'under_review';
-  const canSubmitReview = isReviewer && submission?.status === 'under_review';
-  const canEdit = user?.role === 'researcher' && submission?.status === 'draft';
+  const canSubmitReview = (isReviewer || user?.role === 'admin') && submission?.status === 'under_review';
+  const canEdit = user?.role === 'researcher' && EDITABLE_STATUSES.includes(submission?.status);
 
   useEffect(() => {
     loadSubmission();
@@ -177,7 +200,7 @@ function ViewSubmission({ user, onLogout }) {
                 className="btn-header btn-header--primary"
                 onClick={() => navigate(`/submission/${id}/edit`)}
               >
-                Edit
+                {submission?.status === 'revisions_required' ? 'Revise' : 'Edit'}
               </button>
             )}
             <button
@@ -221,7 +244,7 @@ function ViewSubmission({ user, onLogout }) {
             <div className="info-grid">
               <div><strong>Full Name:</strong> {formData.principalInvestigator?.fullName || 'N/A'}</div>
               <div><strong>Job Title:</strong> {formData.principalInvestigator?.jobTitle || 'N/A'}</div>
-              <div><strong>Institution:</strong> {formData.principalInvestigator?.institution || 'N/A'}</div>
+              <div><strong>Institution:</strong> {formData.principalInvestigator?.hospital || formData.principalInvestigator?.institution || 'N/A'}</div>
               <div><strong>Department:</strong> {formData.principalInvestigator?.department || 'N/A'}</div>
               <div><strong>Qualifications:</strong> {formData.principalInvestigator?.qualifications || 'N/A'}</div>
               <div><strong>Telephone:</strong> {formData.principalInvestigator?.telephone || 'N/A'}</div>
@@ -259,21 +282,13 @@ function ViewSubmission({ user, onLogout }) {
             {formData.informationSheetFiles && formData.informationSheetFiles.length > 0 && (
               <div>
                 <strong>Information Sheet Files:</strong>
-                <ul>
-                  {formData.informationSheetFiles.map((file, index) => (
-                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                  ))}
-                </ul>
+                {renderFileList(formData.informationSheetFiles)}
               </div>
             )}
             {formData.consentFormFiles && formData.consentFormFiles.length > 0 && (
               <div>
                 <strong>Consent Form Files:</strong>
-                <ul>
-                  {formData.consentFormFiles.map((file, index) => (
-                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                  ))}
-                </ul>
+                {renderFileList(formData.consentFormFiles)}
               </div>
             )}
           </div>
@@ -327,11 +342,7 @@ function ViewSubmission({ user, onLogout }) {
                 {formData.previousEthicsProjectApproved === 'Yes' && formData.ethicsApprovalDocuments && formData.ethicsApprovalDocuments.length > 0 && (
                   <div style={{ marginTop: '0.5rem' }}>
                     <strong>Ethics approval document(s):</strong>
-                    <ul>
-                      {formData.ethicsApprovalDocuments.map((file, index) => (
-                        <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                      ))}
-                    </ul>
+                    {renderFileList(formData.ethicsApprovalDocuments)}
                   </div>
                 )}
               </div>
@@ -382,11 +393,7 @@ function ViewSubmission({ user, onLogout }) {
                     {formData.bloodTissueAbroadDocuments && formData.bloodTissueAbroadDocuments.length > 0 && (
                       <div style={{ marginTop: '0.5rem' }}>
                         <strong>Supporting documents:</strong>
-                        <ul>
-                          {formData.bloodTissueAbroadDocuments.map((file, index) => (
-                            <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                          ))}
-                        </ul>
+                        {renderFileList(formData.bloodTissueAbroadDocuments)}
                       </div>
                     )}
                   </>
@@ -448,21 +455,13 @@ function ViewSubmission({ user, onLogout }) {
             {formData.sampleSizeFiles && formData.sampleSizeFiles.length > 0 && (
               <div>
                 <strong>Sample Size Calculation Files:</strong>
-                <ul>
-                  {formData.sampleSizeFiles.map((file, index) => (
-                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                  ))}
-                </ul>
+                {renderFileList(formData.sampleSizeFiles)}
               </div>
             )}
             {formData.researchProposalFiles && formData.researchProposalFiles.length > 0 && (
               <div>
                 <strong>Research Proposal Files:</strong>
-                <ul>
-                  {formData.researchProposalFiles.map((file, index) => (
-                    <li key={index}>{getUploadedFileDisplayName(file)}</li>
-                  ))}
-                </ul>
+                {renderFileList(formData.researchProposalFiles)}
               </div>
             )}
           </div>

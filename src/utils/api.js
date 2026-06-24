@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from './apiConfig.js';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -21,23 +20,82 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 - token expired (only redirect for protected routes, not auth endpoints)
-const authEndpoints = ['/auth/login', '/auth/signup', '/auth/verify-signup', '/auth/forgot-password', '/auth/reset-password', '/auth/resend-signup-otp'];
+// Handle 401 - attempt token refresh before redirecting to login
+const authEndpoints = ['/auth/login', '/auth/signup', '/auth/verify-signup', '/auth/forgot-password', '/auth/reset-password', '/auth/resend-signup-otp', '/auth/refresh-token'];
+
+let isRefreshing = false;
+let refreshQueue = [];
+
+const clearSession = () => {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+};
+
+const processRefreshQueue = (error, token = null) => {
+  refreshQueue.forEach(({ resolve, reject }) => {
+    if (error) reject(error);
+    else resolve(token);
+  });
+  refreshQueue = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      const isAuthRequest = authEndpoints.some((path) =>
-        error.config?.url?.includes(path)
-      );
-      if (!isAuthRequest) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status !== 401 || !originalRequest) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    const isAuthRequest = authEndpoints.some((path) => originalRequest.url?.includes(path));
+    if (isAuthRequest) {
+      return Promise.reject(error);
+    }
+
+    if (originalRequest._retry) {
+      clearSession();
+      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    const storedRefreshToken = localStorage.getItem('refreshToken');
+    if (!storedRefreshToken) {
+      clearSession();
+      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        refreshQueue.push({ resolve, reject });
+      }).then((token) => {
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return api(originalRequest);
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+        refreshToken: storedRefreshToken,
+      });
+      const { accessToken, refreshToken: newRefreshToken } = refreshResponse.data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', newRefreshToken);
+      processRefreshQueue(null, accessToken);
+      originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+      return api(originalRequest);
+    } catch (refreshError) {
+      processRefreshQueue(refreshError, null);
+      clearSession();
+      window.location.href = '/login';
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
   }
 );
 
@@ -65,6 +123,7 @@ const buildSubmissionFormData = (data) => {
     'sampleSizeFiles',
     'dataVariablesFiles',
     'researchProposalFiles',
+    'bloodTissueAbroadDocuments',
   ];
   for (const field of fileFields) {
     if (Array.isArray(sanitized[field])) {
