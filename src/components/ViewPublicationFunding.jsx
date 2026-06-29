@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Check, Circle } from 'lucide-react';
 import {
   getPublicationFunding,
   submitPublicationFundingReview,
@@ -7,20 +9,29 @@ import {
 } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import { ELIGIBILITY_ITEMS, ATTACHMENT_ITEMS, FUNDING_ITEMS } from './publicationFunding/formData';
-import { API_ORIGIN } from '../utils/apiConfig.js';
-import UserMenu from './UserMenu';
-import './ViewSubmission.css';
-import './Dashboard.css';
-
-function getFileName(file) {
-  if (!file) return 'File';
-  if (typeof file === 'string') return file;
-  return file.name || file.originalName || file._fileMeta?.name || 'File';
-}
-
-function ViewField({ label, value }) {
-  return <p><strong>{label}:</strong> {value || 'N/A'}</p>;
-}
+import AppHeader from './AppHeader';
+import { StatusBadge } from './StatusBadge';
+import { SectionCard, InfoRow, FileList } from './view/ViewPrimitives';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 
 const EDITABLE_STATUSES = ['draft', 'revisions_required'];
 
@@ -59,7 +70,7 @@ function ViewPublicationFunding({ user, onLogout }) {
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (!reviewDecision.comments.trim()) {
-      alert('Please provide review comments.');
+      toast.error('Please provide review comments.');
       return;
     }
     setSubmittingReview(true);
@@ -67,7 +78,7 @@ function ViewPublicationFunding({ user, onLogout }) {
       await submitPublicationFundingReview(id, reviewDecision.status, reviewDecision.comments);
       navigate(backPath);
     } catch {
-      alert('Failed to submit review.');
+      toast.error('Failed to submit review.');
     } finally {
       setSubmittingReview(false);
     }
@@ -79,325 +90,269 @@ function ViewPublicationFunding({ user, onLogout }) {
     try {
       const updated = await updateCommitteeReview(id, committeeReview);
       setApplication(updated);
-      alert('Committee review saved.');
+      toast.success('Committee review saved.');
     } catch {
-      alert('Failed to save committee review.');
+      toast.error('Failed to save committee review.');
     } finally {
       setSavingCommittee(false);
     }
   };
 
-  const header = (title, subtitle = 'Publication Funding Application') => (
-    <header className="header">
-      <div className="header-content">
-        <div className="header-brand">
-          <h1>{title}</h1>
-          <span className="header-subtitle">{subtitle}</span>
-        </div>
-        <div className="header-user header-actions">
-          {application && EDITABLE_STATUSES.includes(application.status) && user?.role === 'researcher' && (
-            <button
-              className="btn-header btn-header--primary"
-              onClick={() => navigate(`/publication-funding/${id}/edit`)}
-            >
-              {application.status === 'revisions_required' ? 'Revise' : 'Edit'}
-            </button>
-          )}
-          <button
-            className="btn-header"
-            onClick={() => navigate(backPath)}
-          >
-            Back
-          </button>
-          <UserMenu user={user} onLogout={onLogout} />
-        </div>
-      </div>
-    </header>
+  const actions = (
+    <>
+      {application && EDITABLE_STATUSES.includes(application.status) && user?.role === 'researcher' && (
+        <Button size="sm" onClick={() => navigate(`/publication-funding/${id}/edit`)}>
+          {application.status === 'revisions_required' ? 'Revise' : 'Edit'}
+        </Button>
+      )}
+      <Button variant="outline" size="sm" onClick={() => navigate(backPath)}>Back</Button>
+    </>
+  );
+
+  const shell = (title, children, headerActions) => (
+    <div className="min-h-screen bg-background">
+      <AppHeader user={user} onLogout={onLogout} title={title} subtitle="Publication Funding Application" actions={headerActions} />
+      <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+    </div>
   );
 
   if (loading) {
-    return (
-      <div className="app-page">
-        {header('View Application')}
-        <div className="container"><div className="loading">Loading...</div></div>
-      </div>
-    );
+    return shell('View Application', <div className="py-16 text-center text-sm text-muted-foreground">Loading...</div>);
   }
 
   if (!application) {
-    return (
-      <div className="app-page">
-        {header('View Application')}
-        <div className="container">
-          <div className="card">
-            <p>Application not found.</p>
-            <button className="btn btn-primary" onClick={() => navigate(backPath)}>Back</button>
-          </div>
-        </div>
-      </div>
+    return shell(
+      'View Application',
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+          <p className="text-sm text-muted-foreground">Application not found.</p>
+          <Button onClick={() => navigate(backPath)}>Back</Button>
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <div className="app-page">
-      {header('Publication Funding Application')}
-      <div className="container">
-        <div className="card">
-          <h2>{application.manuscriptTitle}</h2>
-          <p className="submission-meta">
-            {application.applicationId} | Applicant: {application.applicantName} |
-            Status: <span className={`status-badge status-${application.status}`}>
-              {application.status.replace('_', ' ').toUpperCase()}
-            </span>
-          </p>
-        </div>
+  return shell(
+    'Publication Funding Application',
+    <>
+      <Card>
+        <CardContent className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{application.manuscriptTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {application.applicationId} · Applicant: {application.applicantName}
+            </p>
+          </div>
+          <StatusBadge status={application.status} />
+        </CardContent>
+      </Card>
 
-        <div className="card">
-          <h3>Section 1: Applicant Information</h3>
-          <ViewField label="Full name" value={fd.fullName} />
-          <ViewField label="Department / Unit" value={fd.department} />
-          <ViewField label="Position / Title" value={fd.position} />
-          <ViewField label="Email" value={fd.email} />
-          <ViewField label="Phone" value={fd.phone} />
-          <ViewField label="Principal Investigator" value={fd.principalInvestigator} />
-        </div>
+      <SectionCard title="Section 1: Applicant Information">
+        <InfoRow label="Full name" value={fd.fullName} />
+        <InfoRow label="Department / Unit" value={fd.department} />
+        <InfoRow label="Position / Title" value={fd.position} />
+        <InfoRow label="Email" value={fd.email} />
+        <InfoRow label="Phone" value={fd.phone} />
+        <InfoRow label="Principal Investigator" value={fd.principalInvestigator} />
+      </SectionCard>
 
-        <div className="card">
-          <h3>Section 2: Publication Information</h3>
-          <ViewField label="Manuscript title" value={fd.manuscriptTitle} />
-          <ViewField label="Journal name" value={fd.journalName} />
-          <ViewField label="Date of acceptance" value={fd.dateOfAcceptance} />
-          <ViewField label="Date of publication" value={fd.dateOfPublication} />
-          <ViewField label="DOI / link" value={fd.doiOrLink} />
-          <ViewField label="Scopus indexed" value={fd.scopusIndexed} />
-          <ViewField label="Journal quartile" value={fd.journalQuartile} />
-          <ViewField label="Impact factor" value={fd.impactFactor} />
-          <ViewField label="Quartile source" value={fd.quartileSource} />
-          {fd.quartileSource === 'Other' && (
-            <ViewField label="Other quartile source" value={fd.quartileSourceOther} />
-          )}
-          {(fd.frontPageOrArticleFiles || []).length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <p><strong>Front page / article files</strong></p>
-              <ul>
-                {fd.frontPageOrArticleFiles.map((file, i) => (
-                  <li key={i}>
-                    {file.path ? (
-                      <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
-                        {getFileName(file)}
-                      </a>
-                    ) : getFileName(file)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      <SectionCard title="Section 2: Publication Information">
+        <InfoRow label="Manuscript title" value={fd.manuscriptTitle} />
+        <InfoRow label="Journal name" value={fd.journalName} />
+        <InfoRow label="Date of acceptance" value={fd.dateOfAcceptance} />
+        <InfoRow label="Date of publication" value={fd.dateOfPublication} />
+        <InfoRow label="DOI / link" value={fd.doiOrLink} />
+        <InfoRow label="Scopus indexed" value={fd.scopusIndexed} />
+        <InfoRow label="Journal quartile" value={fd.journalQuartile} />
+        <InfoRow label="Impact factor" value={fd.impactFactor} />
+        <InfoRow label="Quartile source" value={fd.quartileSource} />
+        {fd.quartileSource === 'Other' && <InfoRow label="Other quartile source" value={fd.quartileSourceOther} />}
+        <FileList label="Front page / article files" files={fd.frontPageOrArticleFiles} />
+      </SectionCard>
 
-        <div className="card">
-          <h3>Section 3: Authorship and Affiliation</h3>
-          <ViewField label="Applicant role" value={fd.applicantRole?.join(', ')} />
-          <ViewField label="MCMSS affiliation stated" value={fd.mcmssAffiliationStated} />
-        </div>
+      <SectionCard title="Section 3: Authorship and Affiliation">
+        <InfoRow label="Applicant role" value={fd.applicantRole?.join(', ')} />
+        <InfoRow label="MCMSS affiliation stated" value={fd.mcmssAffiliationStated} />
+      </SectionCard>
 
-        <div className="card">
-          <h3>Section 4: Type of Publication</h3>
-          <ViewField label="Publication type" value={fd.publicationType} />
-          {fd.publicationType === 'Other' && (
-            <>
-              <ViewField label="Other specification" value={fd.publicationTypeOther} />
-              <ViewField label="Eligibility explanation" value={fd.publicationTypeOtherExplanation} />
-            </>
-          )}
-        </div>
+      <SectionCard title="Section 4: Type of Publication">
+        <InfoRow label="Publication type" value={fd.publicationType} />
+        {fd.publicationType === 'Other' && (
+          <>
+            <InfoRow label="Other specification" value={fd.publicationTypeOther} />
+            <InfoRow full label="Eligibility explanation" value={fd.publicationTypeOtherExplanation} />
+          </>
+        )}
+      </SectionCard>
 
-        <div className="card">
-          <h3>Section 5: Ethical and Administrative Compliance</h3>
-          <ViewField label="Prior ethical approval" value={fd.priorEthicalApproval} />
-          <ViewField label="IRB number" value={fd.irbApprovalNumber} />
-          <ViewField label="Approving institution" value={fd.approvingInstitution} />
-          <ViewField label="Approval date" value={fd.ethicsApprovalDate} />
-          <ViewField label="Reason if not required" value={fd.ethicsNotRequiredReason} />
-          {fd.ethicsNotRequiredReason === 'Other' && (
-            <ViewField label="Other reason" value={fd.ethicsNotRequiredOther} />
-          )}
-        </div>
+      <SectionCard title="Section 5: Ethical and Administrative Compliance">
+        <InfoRow label="Prior ethical approval" value={fd.priorEthicalApproval} />
+        <InfoRow label="IRB number" value={fd.irbApprovalNumber} />
+        <InfoRow label="Approving institution" value={fd.approvingInstitution} />
+        <InfoRow label="Approval date" value={fd.ethicsApprovalDate} />
+        <InfoRow label="Reason if not required" value={fd.ethicsNotRequiredReason} />
+        {fd.ethicsNotRequiredReason === 'Other' && <InfoRow label="Other reason" value={fd.ethicsNotRequiredOther} />}
+      </SectionCard>
 
-        <div className="card">
-          <h3>Section 6: Funding Request Details</h3>
-          <table className="table">
-            <thead>
-              <tr><th>Item</th><th>Requested</th><th>Amount (OMR)</th></tr>
-            </thead>
-            <tbody>
+      <SectionCard title="Section 6: Funding Request Details">
+        <div className="overflow-hidden rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead>Requested</TableHead>
+                <TableHead>Amount (OMR)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {FUNDING_ITEMS.map(({ key, label }) => (
-                <tr key={key}>
-                  <td>
+                <TableRow key={key}>
+                  <TableCell className="whitespace-normal">
                     {label}
                     {key === 'other' && fd.fundingItems?.other?.specify ? ` (${fd.fundingItems.other.specify})` : ''}
-                  </td>
-                  <td>{fd.fundingItems?.[key]?.requested || '—'}</td>
-                  <td>{fd.fundingItems?.[key]?.amount || '—'}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{fd.fundingItems?.[key]?.requested || '—'}</TableCell>
+                  <TableCell>{fd.fundingItems?.[key]?.amount || '—'}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-          <ViewField label="Total requested" value={fd.totalRequestedAmount} />
-          <ViewField label="Date of payment" value={fd.dateOfPayment} />
-          {(fd.proofOfPaymentFiles || []).length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <p><strong>Proof of payment files</strong></p>
-              <ul>
-                {fd.proofOfPaymentFiles.map((file, i) => (
-                  <li key={i}>
-                    {file.path ? (
-                      <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
-                        {getFileName(file)}
-                      </a>
-                    ) : getFileName(file)}
-                  </li>
+            </TableBody>
+          </Table>
+        </div>
+        <InfoRow label="Total requested" value={fd.totalRequestedAmount} />
+        <InfoRow label="Date of payment" value={fd.dateOfPayment} />
+        <FileList label="Proof of payment files" files={fd.proofOfPaymentFiles} />
+      </SectionCard>
+
+      <SectionCard title="Section 7: Eligibility Checklist">
+        <ul className="space-y-2">
+          {ELIGIBILITY_ITEMS.map(({ key, label }) => {
+            const checked = fd.eligibilityChecklist?.[key];
+            return (
+              <li key={key} className="flex items-start gap-2">
+                {checked ? (
+                  <Check className="mt-0.5 size-4 shrink-0 text-success" />
+                ) : (
+                  <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className="text-muted-foreground">{label}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </SectionCard>
+
+      <SectionCard title="Section 8: Required Attachments">
+        {ATTACHMENT_ITEMS.map(({ key, label, files }) =>
+          fd.attachmentChecklist?.[key] ? (
+            <FileList key={key} label={label} files={fd[files]} />
+          ) : null
+        )}
+      </SectionCard>
+
+      <SectionCard title="Section 9: Applicant Declaration">
+        <InfoRow label="Applicant name" value={fd.applicantDeclarationName} />
+        <InfoRow label="Signature" value={fd.applicantSignature} />
+        <InfoRow label="Date" value={fd.applicantDeclarationDate} />
+      </SectionCard>
+
+      {application.reviewComments && (
+        <SectionCard title="Review Comments">
+          <p className="whitespace-pre-wrap text-muted-foreground">{application.reviewComments}</p>
+        </SectionCard>
+      )}
+
+      {canSubmitReview && (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="text-base">Submit Review Decision</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Decision</Label>
+                <Select value={reviewDecision.status} onValueChange={(v) => setReviewDecision((p) => ({ ...p, status: v }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approved">Approve</SelectItem>
+                    <SelectItem value="revisions_required">Request Revisions</SelectItem>
+                    <SelectItem value="rejected">Reject</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Comments *</Label>
+                <Textarea rows={5} value={reviewDecision.comments} onChange={(e) => setReviewDecision((p) => ({ ...p, comments: e.target.value }))} required />
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={submittingReview}>
+                  {submittingReview ? 'Submitting...' : 'Submit Review'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle className="text-base">Section 10: Committee Review</CardTitle>
+            <CardDescription>For Research &amp; Studies Committee use only.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSaveCommitteeReview} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  ['applicationReceivedOn', 'Application received on', 'date'],
+                  ['reviewedBy', 'Reviewed by', 'text'],
+                  ['approvedAmount', 'Approved amount (OMR)', 'text'],
+                  ['finalDecision', 'Final decision', 'text'],
+                  ['dateOfDecision', 'Date of decision', 'date'],
+                ].map(([key, label, type]) => (
+                  <div className="space-y-2" key={key}>
+                    <Label>{label}</Label>
+                    <Input type={type} value={committeeReview[key] || ''} onChange={(e) => setCommitteeReview((p) => ({ ...p, [key]: e.target.value }))} />
+                  </div>
                 ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="card">
-          <h3>Section 7: Eligibility Checklist</h3>
-          <ul>
-            {ELIGIBILITY_ITEMS.map(({ key, label }) => (
-              <li key={key}>{fd.eligibilityChecklist?.[key] ? '✓' : '○'} {label}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="card">
-          <h3>Section 8: Required Attachments</h3>
-          {ATTACHMENT_ITEMS.map(({ key, label, files }) => (
-            fd.attachmentChecklist?.[key] ? (
-              <div key={key} style={{ marginBottom: '1rem' }}>
-                <p><strong>{label}</strong></p>
-                <ul>
-                  {(fd[files] || []).map((file, i) => (
-                    <li key={i}>
-                      {file.path ? (
-                        <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
-                          {getFileName(file)}
-                        </a>
-                      ) : getFileName(file)}
-                    </li>
-                  ))}
-                </ul>
               </div>
-            ) : null
-          ))}
-        </div>
-
-        <div className="card">
-          <h3>Section 9: Applicant Declaration</h3>
-          <ViewField label="Applicant name" value={fd.applicantDeclarationName} />
-          <ViewField label="Signature" value={fd.applicantSignature} />
-          <ViewField label="Date" value={fd.applicantDeclarationDate} />
-        </div>
-
-        {application.reviewComments && (
-          <div className="card">
-            <h3>Review Comments</h3>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{application.reviewComments}</p>
-          </div>
-        )}
-
-        {canSubmitReview && (
-          <div className="card review-decision-card">
-            <h3>Submit Review Decision</h3>
-            <form onSubmit={handleSubmitReview}>
-              <div className="form-group">
-                <label>Decision</label>
-                <select
-                  className="form-control"
-                  value={reviewDecision.status}
-                  onChange={(e) => setReviewDecision((p) => ({ ...p, status: e.target.value }))}
-                >
-                  <option value="approved">Approve</option>
-                  <option value="revisions_required">Request Revisions</option>
-                  <option value="rejected">Reject</option>
-                </select>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  ['journalQualityVerified', 'Journal quality verified'],
+                  ['authorshipEligibilityVerified', 'Authorship eligibility verified'],
+                  ['ethicalComplianceVerified', 'Ethical compliance verified'],
+                  ['recommendedForFunding', 'Recommended for funding'],
+                ].map(([key, label]) => (
+                  <div className="space-y-2" key={key}>
+                    <Label>{label}</Label>
+                    <Select
+                      value={committeeReview[key] || 'none'}
+                      onValueChange={(v) => setCommitteeReview((p) => ({ ...p, [key]: v === 'none' ? '' : v }))}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
-              <div className="form-group">
-                <label>Comments *</label>
-                <textarea
-                  className="form-control"
-                  rows={5}
-                  value={reviewDecision.comments}
-                  onChange={(e) => setReviewDecision((p) => ({ ...p, comments: e.target.value }))}
-                  required
-                />
+              <div className="space-y-2">
+                <Label>Comments</Label>
+                <Textarea rows={4} value={committeeReview.comments || ''} onChange={(e) => setCommitteeReview((p) => ({ ...p, comments: e.target.value }))} />
               </div>
-              <button type="submit" className="btn btn-primary" disabled={submittingReview}>
-                {submittingReview ? 'Submitting...' : 'Submit Review'}
-              </button>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={savingCommittee}>
+                  {savingCommittee ? 'Saving...' : 'Save Committee Review'}
+                </Button>
+              </div>
             </form>
-          </div>
-        )}
-
-        {isAdmin && (
-          <div className="card">
-            <h3>Section 10: Committee Review</h3>
-            <p style={{ color: '#6c757d', marginBottom: '1rem' }}>For Research &amp; Studies Committee use only.</p>
-            <form onSubmit={handleSaveCommitteeReview}>
-              {[
-                ['applicationReceivedOn', 'Application received on', 'date'],
-                ['reviewedBy', 'Reviewed by', 'text'],
-                ['approvedAmount', 'Approved amount (OMR)', 'text'],
-                ['finalDecision', 'Final decision', 'text'],
-                ['dateOfDecision', 'Date of decision', 'date'],
-              ].map(([key, label, type]) => (
-                <div className="form-group" key={key}>
-                  <label>{label}</label>
-                  <input
-                    type={type}
-                    className="form-control"
-                    value={committeeReview[key] || ''}
-                    onChange={(e) => setCommitteeReview((p) => ({ ...p, [key]: e.target.value }))}
-                  />
-                </div>
-              ))}
-              {[
-                ['journalQualityVerified', 'Journal quality verified'],
-                ['authorshipEligibilityVerified', 'Authorship eligibility verified'],
-                ['ethicalComplianceVerified', 'Ethical compliance verified'],
-                ['recommendedForFunding', 'Recommended for funding'],
-              ].map(([key, label]) => (
-                <div className="form-group" key={key}>
-                  <label>{label}</label>
-                  <select
-                    className="form-control"
-                    value={committeeReview[key] || ''}
-                    onChange={(e) => setCommitteeReview((p) => ({ ...p, [key]: e.target.value }))}
-                  >
-                    <option value="">—</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-              ))}
-              <div className="form-group">
-                <label>Comments</label>
-                <textarea
-                  className="form-control"
-                  rows={4}
-                  value={committeeReview.comments || ''}
-                  onChange={(e) => setCommitteeReview((p) => ({ ...p, comments: e.target.value }))}
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={savingCommittee}>
-                {savingCommittee ? 'Saving...' : 'Save Committee Review'}
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </div>
+          </CardContent>
+        </Card>
+      )}
+    </>,
+    actions
   );
 }
 

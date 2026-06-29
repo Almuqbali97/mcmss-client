@@ -2,8 +2,21 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSubmission, updateFieldComments, submitReview } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
-import UserMenu from './UserMenu';
-import './ViewSubmission.css';
+import AppHeader from './AppHeader';
+import { StatusBadge } from './StatusBadge';
+import { SectionCard, InfoRow, InfoGrid, FileList } from './view/ViewPrimitives';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 
 const SECTION7_FIELDS = [
   { key: 'introduction', label: 'Introduction' },
@@ -15,34 +28,6 @@ const SECTION7_FIELDS = [
   { key: 'expectedOutcomes', label: 'Expected Outcomes' },
   { key: 'references', label: 'References' },
 ];
-
-/** Uploaded files from the API are { filename, originalName, path }; the form may use File.name or _fileMeta. */
-function getUploadedFileDisplayName(file) {
-  if (file == null) return 'File';
-  if (typeof file === 'string') return file;
-  return file.name || file.originalName || file._fileMeta?.name || 'File';
-}
-
-import { API_ORIGIN } from '../utils/apiConfig.js';
-
-function renderFileList(files) {
-  if (!files?.length) return null;
-  return (
-    <ul>
-      {files.map((file, index) => (
-        <li key={index}>
-          {file.path ? (
-            <a href={`${API_ORIGIN}${file.path}`} target="_blank" rel="noreferrer">
-              {getUploadedFileDisplayName(file)}
-            </a>
-          ) : (
-            getUploadedFileDisplayName(file)
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 const EDITABLE_STATUSES = ['draft', 'revisions_required'];
 
@@ -86,16 +71,12 @@ function ViewSubmission({ user, onLogout }) {
     }
   };
 
-  const getStatusClass = (status) => {
-    return `status-badge status-${status}`;
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -135,392 +116,283 @@ function ViewSubmission({ user, onLogout }) {
 
   const backPath = getDefaultRouteForRole(user?.role);
 
+  const shell = (children) => (
+    <div className="min-h-screen bg-background">
+      <AppHeader user={user} onLogout={onLogout} title="View Submission" subtitle="Research Ethics Application" />
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+    </div>
+  );
+
   if (loading) {
-    return (
-      <div className="app-page">
-        <header className="header">
-          <div className="header-content">
-            <div className="header-brand">
-              <h1>View Submission</h1>
-              <span className="header-subtitle">Research Ethics Application</span>
-            </div>
-            <div className="header-user">
-              <UserMenu user={user} onLogout={onLogout} />
-            </div>
-          </div>
-        </header>
-        <div className="container">
-          <div className="loading">Loading submission...</div>
-        </div>
-      </div>
-    );
+    return shell(<div className="py-16 text-center text-sm text-muted-foreground">Loading submission...</div>);
   }
 
   if (!submission) {
-    return (
-      <div className="app-page">
-        <header className="header">
-          <div className="header-content">
-            <div className="header-brand">
-              <h1>View Submission</h1>
-              <span className="header-subtitle">Research Ethics Application</span>
-            </div>
-            <div className="header-user">
-              <UserMenu user={user} onLogout={onLogout} />
-            </div>
-          </div>
-        </header>
-        <div className="container">
-          <div className="card">
-            <div className="empty-state">
-              <h3>Submission not found</h3>
-              <button className="btn btn-primary" onClick={() => navigate(backPath)}>
-                Back to {isReviewer ? 'Review Dashboard' : 'Dashboard'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    return shell(
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+          <h3 className="text-base font-semibold text-foreground">Submission not found</h3>
+          <Button onClick={() => navigate(backPath)}>
+            Back to {isReviewer ? 'Review Dashboard' : 'Dashboard'}
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   const formData = submission.formData || {};
 
   return (
-    <div className="app-page">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-brand">
-            <h1>View Submission</h1>
-            <span className="header-subtitle">Research Ethics Application</span>
-          </div>
-          <div className="header-user header-actions">
+    <div className="min-h-screen bg-background">
+      <AppHeader
+        user={user}
+        onLogout={onLogout}
+        title="View Submission"
+        subtitle="Research Ethics Application"
+        actions={
+          <>
             {canEdit && (
-              <button
-                className="btn-header btn-header--primary"
-                onClick={() => navigate(`/submission/${id}/edit`)}
-              >
+              <Button size="sm" onClick={() => navigate(`/submission/${id}/edit`)}>
                 {submission?.status === 'revisions_required' ? 'Revise' : 'Edit'}
-              </button>
+              </Button>
             )}
-            <button
-              className="btn-header"
-              onClick={() => navigate(backPath)}
-            >
+            <Button variant="outline" size="sm" onClick={() => navigate(backPath)}>
               Back
-            </button>
-            <UserMenu user={user} onLogout={onLogout} />
-          </div>
-        </div>
-      </header>
+            </Button>
+          </>
+        }
+      />
 
-      <div className="container">
-        <div className="card">
-          <div className="submission-header">
+      <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
+        <Card>
+          <CardContent className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2>{submission.researchTitle || 'Untitled Research'}</h2>
-              <p className="submission-meta">
-                Submitted: {formatDate(submission.submittedDate)} |
-                Status: <span className={getStatusClass(submission.status)}>
-                  {submission.status.replace('_', ' ').toUpperCase()}
-                </span>
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                {submission.researchTitle || 'Untitled Research'}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Submitted: {formatDate(submission.submittedDate)}
               </p>
             </div>
-          </div>
-        </div>
+            <StatusBadge status={submission.status} />
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <h3>Section 1: Terms and Conditions</h3>
-          <div className="section-content">
-            <p><strong>Research Title:</strong> {formData.researchTitle || 'N/A'}</p>
-            <p><strong>Consent Acknowledged:</strong> {formData.consentAcknowledged ? 'Yes' : 'No'}</p>
-          </div>
-        </div>
+        <SectionCard title="Section 1: Terms and Conditions">
+          <InfoRow label="Research Title" value={formData.researchTitle} />
+          <InfoRow label="Consent Acknowledged" value={formData.consentAcknowledged ? 'Yes' : 'No'} />
+        </SectionCard>
 
-        <div className="card">
-          <h3>Section 2: Researcher Details</h3>
-          <div className="section-content">
-            <h4>Principal Investigator</h4>
-            <div className="info-grid">
-              <div><strong>Full Name:</strong> {formData.principalInvestigator?.fullName || 'N/A'}</div>
-              <div><strong>Job Title:</strong> {formData.principalInvestigator?.jobTitle || 'N/A'}</div>
-              <div><strong>Institution:</strong> {formData.principalInvestigator?.hospital || formData.principalInvestigator?.institution || 'N/A'}</div>
-              <div><strong>Department:</strong> {formData.principalInvestigator?.department || 'N/A'}</div>
-              <div><strong>Qualifications:</strong> {formData.principalInvestigator?.qualifications || 'N/A'}</div>
-              <div><strong>Telephone:</strong> {formData.principalInvestigator?.telephone || 'N/A'}</div>
-              <div><strong>Email:</strong> {formData.principalInvestigator?.email || 'N/A'}</div>
+        <SectionCard title="Section 2: Researcher Details">
+          <h4 className="font-semibold text-foreground">Principal Investigator</h4>
+          <InfoGrid>
+            <InfoRow label="Full Name" value={formData.principalInvestigator?.fullName} />
+            <InfoRow label="Job Title" value={formData.principalInvestigator?.jobTitle} />
+            <InfoRow label="Institution" value={formData.principalInvestigator?.hospital || formData.principalInvestigator?.institution} />
+            <InfoRow label="Department" value={formData.principalInvestigator?.department} />
+            <InfoRow label="Qualifications" value={formData.principalInvestigator?.qualifications} />
+            <InfoRow label="Telephone" value={formData.principalInvestigator?.telephone} />
+            <InfoRow label="Email" value={formData.principalInvestigator?.email} />
+          </InfoGrid>
+          {formData.coInvestigators?.length > 0 && (
+            <>
+              <h4 className="pt-2 font-semibold text-foreground">Co-Investigators</h4>
+              {formData.coInvestigators.map((coInv, index) => (
+                <div key={index} className="rounded-md border border-border p-3">
+                  <InfoRow label="Name" value={coInv.name} />
+                  <InfoRow label="Professional Post" value={coInv.post} />
+                  <InfoRow label="Institute & Department" value={coInv.institute} />
+                </div>
+              ))}
+            </>
+          )}
+          <InfoRow label="Masters/PhD Award" value={formData.mastersOrPhd} />
+          {formData.mastersOrPhd === 'Yes' && (
+            <div className="rounded-md border border-border p-3">
+              <h4 className="font-semibold text-foreground">Award details</h4>
+              <InfoRow label="Research student (Masters/PhD)" value={formData.researchStudent} />
+              <InfoRow label="Supervisor's name" value={formData.supervisorName} />
+              <InfoRow label="Supervisor's signature" value={formData.supervisorSignature} />
             </div>
-            {formData.coInvestigators && formData.coInvestigators.length > 0 && (
-              <>
-                <h4 style={{ marginTop: '1.5rem' }}>Co-Investigators</h4>
-                {formData.coInvestigators.map((coInv, index) => (
-                  <div key={index} className="co-investigator-box">
-                    <p><strong>Name:</strong> {coInv.name || 'N/A'}</p>
-                    <p><strong>Professional Post:</strong> {coInv.post || 'N/A'}</p>
-                    <p><strong>Institute & Department:</strong> {coInv.institute || 'N/A'}</p>
-                  </div>
-                ))}
-              </>
-            )}
-            <p><strong>Masters/PhD Award:</strong> {formData.mastersOrPhd || 'N/A'}</p>
-            {formData.mastersOrPhd === 'Yes' && (
-              <div className="award-details-view">
-                <h4>Award details</h4>
-                <p><strong>Research student (Masters/PhD):</strong> {formData.researchStudent || 'N/A'}</p>
-                <p><strong>Supervisor's name:</strong> {formData.supervisorName || 'N/A'}</p>
-                <p><strong>Supervisor's signature:</strong> {formData.supervisorSignature || 'N/A'}</p>
-              </div>
-            )}
-          </div>
-        </div>
+          )}
+        </SectionCard>
 
-        <div className="card">
-          <h3>Section 3: Project Description</h3>
-          <div className="section-content">
-            <p><strong>Research Type:</strong> {formData.researchType?.join(', ') || 'N/A'}</p>
-            <p><strong>Study Involvement:</strong> {formData.studyInvolves?.join('; ') || 'N/A'}</p>
-            {formData.informationSheetFiles && formData.informationSheetFiles.length > 0 && (
-              <div>
-                <strong>Information Sheet Files:</strong>
-                {renderFileList(formData.informationSheetFiles)}
-              </div>
-            )}
-            {formData.consentFormFiles && formData.consentFormFiles.length > 0 && (
-              <div>
-                <strong>Consent Form Files:</strong>
-                {renderFileList(formData.consentFormFiles)}
-              </div>
-            )}
-          </div>
-        </div>
+        <SectionCard title="Section 3: Project Description">
+          <InfoRow label="Research Type" value={formData.researchType?.join(', ')} />
+          <InfoRow label="Study Involvement" value={formData.studyInvolves?.join('; ')} />
+          <FileList label="Information Sheet Files" files={formData.informationSheetFiles} />
+          <FileList label="Consent Form Files" files={formData.consentFormFiles} />
+        </SectionCard>
 
-        <div className="card">
-          <h3>Section 4: Confidential Information & Project Details</h3>
-          <div className="section-content">
-            <p><strong>Data Capturing Methods:</strong> {formData.dataCapturingMethods || 'N/A'}</p>
-            <p><strong>Data Storage Mode:</strong> {formData.dataStorageMode || 'N/A'}</p>
-            <p><strong>Data Access:</strong> {formData.dataAccess || 'N/A'}</p>
-            <p><strong>Confidentiality Measures:</strong> {formData.confidentialityMeasures || 'N/A'}</p>
-            <p><strong>Proposed Start Date:</strong> {formData.proposedStartDate || 'N/A'}</p>
-            <p><strong>Duration:</strong> {formData.duration ? `${formData.duration} months` : 'N/A'}</p>
-            <p><strong>Multi-center Research:</strong> {formData.multiCenterResearch || 'N/A'}</p>
-            {formData.multiCenterResearch === 'Yes' &&
-              formData.affiliatedCenters &&
-              formData.affiliatedCenters.length > 0 && (
+        <SectionCard title="Section 4: Confidential Information & Project Details">
+          <InfoRow label="Data Capturing Methods" value={formData.dataCapturingMethods} />
+          <InfoRow label="Data Storage Mode" value={formData.dataStorageMode} />
+          <InfoRow label="Data Access" value={formData.dataAccess} />
+          <InfoRow label="Confidentiality Measures" value={formData.confidentialityMeasures} />
+          <InfoRow label="Proposed Start Date" value={formData.proposedStartDate} />
+          <InfoRow label="Duration" value={formData.duration ? `${formData.duration} months` : null} />
+          <InfoRow label="Multi-center Research" value={formData.multiCenterResearch} />
+          {formData.multiCenterResearch === 'Yes' && formData.affiliatedCenters?.length > 0 && (
+            <>
+              <h4 className="pt-2 font-semibold text-foreground">Affiliated Centers</h4>
+              {formData.affiliatedCenters.map((center, index) => (
+                <div key={index} className="rounded-md border border-border p-3">
+                  <InfoRow label={`Center ${index + 1} — Name`} value={center.name} />
+                  <InfoRow label="Country of Affiliation" value={center.country} />
+                </div>
+              ))}
+            </>
+          )}
+          <InfoRow label="Funding Source" value={formData.fundingSource} />
+          {formData.fundingSource === 'Other' && <InfoRow label="Other Funding Source" value={formData.fundingOther} />}
+          {formData.grantSum && (
+            <>
+              <InfoRow label="Grant Sum" value={formData.grantSum} />
+              <InfoRow label="Grant Start Date" value={formData.grantStartDate} />
+              <InfoRow label="Grant End Date" value={formData.grantEndDate} />
+            </>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Section 5: Ethical Considerations">
+          <InfoRow label="Previous Ethics Approval" value={formData.previousEthicsApproval} />
+          {formData.previousEthicsApproval === 'Yes' && (
+            <div className="rounded-md border border-border p-3">
+              <InfoRow label="When did you apply?" value={formData.previousEthicsApplicationDate} />
+              <InfoRow label="Was the research project approved?" value={formData.previousEthicsProjectApproved} />
+              {formData.previousEthicsProjectApproved === 'Yes' && (
+                <FileList label="Ethics approval document(s)" files={formData.ethicsApprovalDocuments} />
+              )}
+            </div>
+          )}
+          <InfoRow label="Collecting Personal Info" value={formData.collectingPersonalInfo} />
+          <InfoRow label="Collecting from Other Source" value={formData.collectingFromOtherSource} />
+          {formData.collectingFromOtherSource === 'Yes' && (
+            <div className="rounded-md border border-border p-3">
+              <InfoRow label="Intend to publish personal information from that source" value={formData.intendPublishPersonalInfoFromOtherSource} />
+              {formData.intendPublishPersonalInfoFromOtherSource === 'Yes' && (
+                <InfoRow full label="Form of publication" value={formData.publishPersonalInfoFromOtherSourceDetails} />
+              )}
+            </div>
+          )}
+          <InfoRow label="Involves Deception" value={formData.involvesDeception} />
+          {formData.involvesDeception === 'Yes' && (
+            <InfoRow full label="Debriefing procedures" value={formData.deceptionDebriefingProcedures} />
+          )}
+          <InfoRow label="Intend to Publish" value={formData.intendToPublish} />
+          <InfoRow label="Blood/Tissue Samples" value={formData.bloodTissueSamples} />
+          {formData.bloodTissueSamples === 'Yes' && (
+            <div className="rounded-md border border-border p-3">
+              <InfoRow label="Number of samples" value={formData.bloodTissueNumberOfSamples} />
+              <InfoRow label="Type of sample" value={formData.bloodTissueSampleType} />
+              <InfoRow label="Quantity of sample from each subject" value={formData.bloodTissueQuantityPerSubject} />
+              <InfoRow label="Samples analyzed in Oman" value={formData.bloodTissueAnalyzedInOman} />
+              {formData.bloodTissueAnalyzedInOman === 'No' && (
                 <>
-                  <h4 style={{ marginTop: '1rem' }}>Affiliated Centers</h4>
-                  {formData.affiliatedCenters.map((center, index) => (
-                    <div key={index} className="co-investigator-box">
-                      <p><strong>Center {index + 1} — Name:</strong> {center.name || 'N/A'}</p>
-                      <p><strong>Country of Affiliation:</strong> {center.country || 'N/A'}</p>
-                    </div>
-                  ))}
+                  <InfoRow label="Institution (analysis abroad)" value={formData.bloodTissueAbroadInstitution} />
+                  <InfoRow label="Country" value={formData.bloodTissueAbroadCountry} />
+                  <InfoRow full label="Discard of samples after analysis" value={formData.bloodTissueDiscardExplanation} />
+                  <FileList label="Supporting documents" files={formData.bloodTissueAbroadDocuments} />
                 </>
               )}
-            <p><strong>Funding Source:</strong> {formData.fundingSource || 'N/A'}</p>
-            {formData.fundingSource === 'Other' && (
-              <p><strong>Other Funding Source:</strong> {formData.fundingOther || 'N/A'}</p>
-            )}
-            {formData.grantSum && (
-              <>
-                <p><strong>Grant Sum:</strong> {formData.grantSum}</p>
-                <p><strong>Grant Start Date:</strong> {formData.grantStartDate || 'N/A'}</p>
-                <p><strong>Grant End Date:</strong> {formData.grantEndDate || 'N/A'}</p>
-              </>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </SectionCard>
 
-        <div className="card">
-          <h3>Section 5: Ethical Considerations</h3>
-          <div className="section-content">
-            <p><strong>Previous Ethics Approval:</strong> {formData.previousEthicsApproval || 'N/A'}</p>
-            {formData.previousEthicsApproval === 'Yes' && (
-              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
-                <p><strong>When did you apply?</strong> {formData.previousEthicsApplicationDate || 'N/A'}</p>
-                <p><strong>Was the research project approved?</strong> {formData.previousEthicsProjectApproved || 'N/A'}</p>
-                {formData.previousEthicsProjectApproved === 'Yes' && formData.ethicsApprovalDocuments && formData.ethicsApprovalDocuments.length > 0 && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <strong>Ethics approval document(s):</strong>
-                    {renderFileList(formData.ethicsApprovalDocuments)}
-                  </div>
-                )}
-              </div>
-            )}
-            <p><strong>Collecting Personal Info:</strong> {formData.collectingPersonalInfo || 'N/A'}</p>
-            <p><strong>Collecting from Other Source:</strong> {formData.collectingFromOtherSource || 'N/A'}</p>
-            {formData.collectingFromOtherSource === 'Yes' && (
-              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
-                <p>
-                  <strong>Intend to publish personal information from that source:</strong>{' '}
-                  {formData.intendPublishPersonalInfoFromOtherSource || 'N/A'}
-                </p>
-                {formData.intendPublishPersonalInfoFromOtherSource === 'Yes' && (
-                  <>
-                    <p>
-                      <strong>Form of publication:</strong>
-                    </p>
-                    <p style={{ whiteSpace: 'pre-wrap' }}>
-                      {formData.publishPersonalInfoFromOtherSourceDetails || 'N/A'}
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-            <p><strong>Involves Deception:</strong> {formData.involvesDeception || 'N/A'}</p>
-            {formData.involvesDeception === 'Yes' && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <strong>Debriefing procedures:</strong>
-                <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.35rem' }}>
-                  {formData.deceptionDebriefingProcedures || 'N/A'}
-                </p>
-              </div>
-            )}
-            <p><strong>Intend to Publish:</strong> {formData.intendToPublish || 'N/A'}</p>
-            <p><strong>Blood/Tissue Samples:</strong> {formData.bloodTissueSamples || 'N/A'}</p>
-            {formData.bloodTissueSamples === 'Yes' && (
-              <div className="award-details-view" style={{ marginTop: '0.75rem' }}>
-                <p><strong>Number of samples:</strong> {formData.bloodTissueNumberOfSamples || 'N/A'}</p>
-                <p><strong>Type of sample:</strong> {formData.bloodTissueSampleType || 'N/A'}</p>
-                <p><strong>Quantity of sample from each subject:</strong> {formData.bloodTissueQuantityPerSubject || 'N/A'}</p>
-                <p><strong>Samples analyzed in Oman:</strong> {formData.bloodTissueAnalyzedInOman || 'N/A'}</p>
-                {formData.bloodTissueAnalyzedInOman === 'No' && (
-                  <>
-                    <p><strong>Institution (analysis abroad):</strong> {formData.bloodTissueAbroadInstitution || 'N/A'}</p>
-                    <p><strong>Country:</strong> {formData.bloodTissueAbroadCountry || 'N/A'}</p>
-                    <p><strong>Discard of samples after analysis:</strong></p>
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{formData.bloodTissueDiscardExplanation || 'N/A'}</p>
-                    {formData.bloodTissueAbroadDocuments && formData.bloodTissueAbroadDocuments.length > 0 && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <strong>Supporting documents:</strong>
-                        {renderFileList(formData.bloodTissueAbroadDocuments)}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <SectionCard title="Section 6: Declaration">
+          <InfoRow label="PI Name" value={formData.piName} />
+          <InfoRow label="Signature" value={formData.piSignature} />
+          <InfoRow label="Date" value={formData.declarationDate} />
+        </SectionCard>
 
-        <div className="card">
-          <h3>Section 6: Declaration</h3>
-          <div className="section-content">
-            <p><strong>PI Name:</strong> {formData.piName || 'N/A'}</p>
-            <p><strong>Signature:</strong> {formData.piSignature || 'N/A'}</p>
-            <p><strong>Date:</strong> {formData.declarationDate || 'N/A'}</p>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3>Section 7: Research Proposal</h3>
-          <div className="section-content">
-            {SECTION7_FIELDS.map(({ key, label }) => (
-              <div key={key} className="field-with-comment">
-                <div><strong>{label}:</strong></div>
-                <p style={{ whiteSpace: 'pre-wrap', marginBottom: '0.5rem' }}>{formData[key] || 'N/A'}</p>
-                {canComment && (
-                  <div className="field-comment-input">
-                    <label>Your comment on {label}</label>
-                    <textarea
-                      className="form-control"
-                      value={fieldComments[key] || ''}
-                      onChange={(e) => setFieldComments(prev => ({ ...prev, [key]: e.target.value }))}
-                      placeholder={`Add comment for ${label}...`}
-                      rows={2}
-                    />
-                  </div>
-                )}
-                {!canComment && fieldComments[key] && (
-                  <div className="field-comment-display">
-                    <strong>Reviewer comment:</strong>
-                    <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.25rem', marginBottom: '1rem' }}>{fieldComments[key]}</p>
-                  </div>
-                )}
-                {!canComment && !fieldComments[key] && <div style={{ marginBottom: '1rem' }} />}
-              </div>
-            ))}
-            {canComment && (
-              <div className="field-comments-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleSaveFieldComments}
-                  disabled={savingComments}
-                >
-                  {savingComments ? 'Saving...' : commentsSaved ? 'Saved' : 'Save field comments'}
-                </button>
-              </div>
-            )}
-            {formData.sampleSizeFiles && formData.sampleSizeFiles.length > 0 && (
-              <div>
-                <strong>Sample Size Calculation Files:</strong>
-                {renderFileList(formData.sampleSizeFiles)}
-              </div>
-            )}
-            {formData.researchProposalFiles && formData.researchProposalFiles.length > 0 && (
-              <div>
-                <strong>Research Proposal Files:</strong>
-                {renderFileList(formData.researchProposalFiles)}
-              </div>
-            )}
-          </div>
-        </div>
+        <SectionCard title="Section 7: Research Proposal">
+          {SECTION7_FIELDS.map(({ key, label }) => (
+            <div key={key} className="space-y-2 border-b border-border pb-4 last:border-0 last:pb-0">
+              <InfoRow full label={label} value={formData[key]} />
+              {canComment && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Your comment on {label}</Label>
+                  <Textarea
+                    value={fieldComments[key] || ''}
+                    onChange={(e) => setFieldComments((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={`Add comment for ${label}...`}
+                    rows={2}
+                  />
+                </div>
+              )}
+              {!canComment && fieldComments[key] && (
+                <div className="rounded-md border border-info/30 bg-info-muted/40 p-3 text-sm">
+                  <span className="font-medium text-foreground">Reviewer comment:</span>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{fieldComments[key]}</p>
+                </div>
+              )}
+            </div>
+          ))}
+          {canComment && (
+            <div className="flex justify-end pt-2">
+              <Button onClick={handleSaveFieldComments} disabled={savingComments}>
+                {savingComments ? 'Saving...' : commentsSaved ? 'Saved' : 'Save field comments'}
+              </Button>
+            </div>
+          )}
+          <FileList label="Sample Size Calculation Files" files={formData.sampleSizeFiles} />
+          <FileList label="Research Proposal Files" files={formData.researchProposalFiles} />
+        </SectionCard>
 
         {submission.reviewComments && (
-          <div className="card">
-            <h3>Review Comments</h3>
-            <div className="section-content">
-              <p style={{ whiteSpace: 'pre-wrap' }}>{submission.reviewComments}</p>
-            </div>
-          </div>
+          <SectionCard title="Review Comments">
+            <p className="whitespace-pre-wrap text-muted-foreground">{submission.reviewComments}</p>
+          </SectionCard>
         )}
 
         {canSubmitReview && (
-          <div className="card review-decision-card">
-            <h3>Submit Review Decision</h3>
-            <p className="review-decision-hint">
-              Add field-level comments in Section 7 above, then submit your overall decision below.
-            </p>
-            <form onSubmit={handleSubmitReview} className="review-decision-form">
-              {reviewError && <div className="form-error review-decision-error">{reviewError}</div>}
-              <div className="form-group">
-                <label htmlFor="reviewStatus">Decision</label>
-                <select
-                  id="reviewStatus"
-                  className="form-control"
-                  value={reviewDecision.status}
-                  onChange={(e) => setReviewDecision((prev) => ({ ...prev, status: e.target.value }))}
-                >
-                  <option value="approved">Approve</option>
-                  <option value="revisions_required">Request Revisions</option>
-                  <option value="rejected">Reject</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label htmlFor="reviewComments">Overall review comments <span className="required">*</span></label>
-                <textarea
-                  id="reviewComments"
-                  className="form-control"
-                  rows={5}
-                  value={reviewDecision.comments}
-                  onChange={(e) => setReviewDecision((prev) => ({ ...prev, comments: e.target.value }))}
-                  placeholder="Summarize your review decision and any required changes..."
-                  required
-                />
-              </div>
-              <div className="review-decision-actions">
-                <button type="button" className="btn btn-outline" onClick={() => navigate(backPath)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={submittingReview}>
-                  {submittingReview ? 'Submitting...' : 'Submit Review'}
-                </button>
-              </div>
-            </form>
-          </div>
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="text-base">Submit Review Decision</CardTitle>
+              <CardDescription>
+                Add field-level comments in Section 7 above, then submit your overall decision below.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                {reviewError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{reviewError}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="reviewStatus">Decision</Label>
+                  <Select value={reviewDecision.status} onValueChange={(v) => setReviewDecision((prev) => ({ ...prev, status: v }))}>
+                    <SelectTrigger id="reviewStatus" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="approved">Approve</SelectItem>
+                      <SelectItem value="revisions_required">Request Revisions</SelectItem>
+                      <SelectItem value="rejected">Reject</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reviewComments">Overall review comments *</Label>
+                  <Textarea
+                    id="reviewComments"
+                    rows={5}
+                    value={reviewDecision.comments}
+                    onChange={(e) => setReviewDecision((prev) => ({ ...prev, comments: e.target.value }))}
+                    placeholder="Summarize your review decision and any required changes..."
+                    required
+                  />
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => navigate(backPath)}>Cancel</Button>
+                  <Button type="submit" disabled={submittingReview}>
+                    {submittingReview ? 'Submitting...' : 'Submit Review'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         )}
-      </div>
+      </main>
     </div>
   );
 }

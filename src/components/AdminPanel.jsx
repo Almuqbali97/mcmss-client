@@ -1,8 +1,95 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSubmissions, assignReviewer, submitReview, getReviewers, createReviewer, updateReviewer, deleteReviewer, exportSubmission, getPublicationFundingApplications, assignPublicationFundingReviewer, submitPublicationFundingReview, exportPublicationFunding } from '../utils/api';
+import { toast } from 'sonner';
+import {
+  ClipboardList,
+  Users,
+  Settings,
+  BarChart3,
+  PanelLeftClose,
+  PanelLeft,
+  Plus,
+  Search,
+  Download,
+} from 'lucide-react';
+import {
+  getSubmissions,
+  assignReviewer,
+  submitReview,
+  getReviewers,
+  createReviewer,
+  updateReviewer,
+  deleteReviewer,
+  exportSubmission,
+  getPublicationFundingApplications,
+  assignPublicationFundingReviewer,
+  submitPublicationFundingReview,
+  exportPublicationFunding,
+} from '../utils/api';
 import UserMenu from './UserMenu';
-import './AdminPanel.css';
+import ThemeToggle from './ThemeToggle';
+import { StatusBadge } from './StatusBadge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
+
+const NAV_ITEMS = [
+  { id: 'applications', label: 'All Applications', Icon: ClipboardList },
+  { id: 'users', label: 'Users', Icon: Users },
+  { id: 'administration', label: 'Administration', Icon: Settings },
+  { id: 'reports', label: 'Reports & Analytics', Icon: BarChart3 },
+];
+
+function StatCard({ value, label }) {
+  return (
+    <Card className="gap-1 py-4">
+      <CardContent className="px-4">
+        <div className="text-2xl font-bold text-foreground">{value}</div>
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ComingSoon({ title, description, detail }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+        {detail && <p className="max-w-md text-xs text-muted-foreground">{detail}</p>}
+      </CardContent>
+    </Card>
+  );
+}
 
 function AdminPanel({ user, onLogout }) {
   const navigate = useNavigate();
@@ -27,6 +114,8 @@ function AdminPanel({ user, onLogout }) {
   const [selectedReviewer, setSelectedReviewer] = useState(null);
   const [reviewerForm, setReviewerForm] = useState({ name: '', email: '', specialization: '' });
   const [reviewerFormError, setReviewerFormError] = useState('');
+  const [reviewerToDeactivate, setReviewerToDeactivate] = useState(null);
+  const [deactivating, setDeactivating] = useState(false);
   const [selectedAssignReviewerId, setSelectedAssignReviewerId] = useState('');
 
   useEffect(() => {
@@ -38,7 +127,7 @@ function AdminPanel({ user, onLogout }) {
       const [subsData, pubData, revsData] = await Promise.all([
         getSubmissions(),
         getPublicationFundingApplications(),
-        getReviewers()
+        getReviewers(),
       ]);
       setSubmissions(subsData);
       setPublicationApps(pubData);
@@ -60,15 +149,15 @@ function AdminPanel({ user, onLogout }) {
       await loadData();
       setShowAssignModal(false);
       setSelectedSubmission(null);
-      alert('Reviewer assigned successfully!');
-    } catch (error) {
-      alert('Failed to assign reviewer. Please try again.');
+      toast.success('Reviewer assigned successfully!');
+    } catch {
+      toast.error('Failed to assign reviewer. Please try again.');
     }
   };
 
   const handleSubmitReview = async () => {
     if (!reviewData.comments.trim()) {
-      alert('Please provide review comments.');
+      toast.error('Please provide review comments.');
       return;
     }
 
@@ -83,9 +172,9 @@ function AdminPanel({ user, onLogout }) {
       setShowReviewModal(false);
       setSelectedSubmission(null);
       setReviewData({ status: 'approved', comments: '' });
-      alert('Review submitted successfully!');
-    } catch (error) {
-      alert('Failed to submit review. Please try again.');
+      toast.success('Review submitted successfully!');
+    } catch {
+      toast.error('Failed to submit review. Please try again.');
     }
   };
 
@@ -103,8 +192,8 @@ function AdminPanel({ user, onLogout }) {
       a.download = `${type === 'publication' ? 'publication-funding' : 'submission'}-${item.applicationId || item.submissionId || submissionId}.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (error) {
-      alert('Failed to export. Please try again.');
+    } catch {
+      toast.error('Failed to export. Please try again.');
     }
   };
 
@@ -119,7 +208,7 @@ function AdminPanel({ user, onLogout }) {
     setReviewerForm({
       name: reviewer.name || '',
       email: reviewer.email || '',
-      specialization: reviewer.specialization || ''
+      specialization: reviewer.specialization || '',
     });
     setReviewerFormError('');
     setShowEditReviewerModal(true);
@@ -140,6 +229,7 @@ function AdminPanel({ user, onLogout }) {
       await createReviewer(reviewerForm);
       await loadData();
       setShowAddReviewerModal(false);
+      toast.success('Reviewer added.');
     } catch (error) {
       setReviewerFormError(error.response?.data?.message || 'Failed to add reviewer. Please try again.');
     }
@@ -162,23 +252,25 @@ function AdminPanel({ user, onLogout }) {
       await loadData();
       setShowEditReviewerModal(false);
       setSelectedReviewer(null);
+      toast.success('Reviewer updated.');
     } catch (error) {
       setReviewerFormError(error.response?.data?.message || 'Failed to update reviewer. Please try again.');
     }
   };
 
-  const handleDeleteReviewer = async (reviewer) => {
-    if (!confirm(`Deactivate reviewer "${reviewer.name}"? They will no longer appear in the reviewers list.`)) return;
+  const confirmDeactivateReviewer = async () => {
+    if (!reviewerToDeactivate) return;
+    setDeactivating(true);
     try {
-      await deleteReviewer(reviewer._id || reviewer.id);
+      await deleteReviewer(reviewerToDeactivate._id || reviewerToDeactivate.id);
       await loadData();
-    } catch (error) {
-      alert('Failed to deactivate reviewer. Please try again.');
+      setReviewerToDeactivate(null);
+      toast.success('Reviewer deactivated.');
+    } catch {
+      toast.error('Failed to deactivate reviewer. Please try again.');
+    } finally {
+      setDeactivating(false);
     }
-  };
-
-  const getStatusClass = (status) => {
-    return `status-badge status-${status}`;
   };
 
   const formatDate = (dateString) => {
@@ -186,11 +278,10 @@ function AdminPanel({ user, onLogout }) {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
-  // Get available years from the active application list
   const getAvailableYears = (items) => {
     const years = new Set();
     items.forEach((s) => {
@@ -210,12 +301,28 @@ function AdminPanel({ user, onLogout }) {
     rejected: items.filter((s) => s.status === 'rejected').length,
   });
 
-  const filteredSubmissions = (filterStatus === 'all' 
-    ? submissions 
-    : submissions.filter(s => s.status === filterStatus))
-    .filter(s => s.status !== 'draft') // Exclude drafts
-    .filter(s => {
-      // Search filter
+  const matchesPeriod = (date) => {
+    if (filterPeriod === 'all' || !date) return true;
+    const daysDiff = Math.floor((new Date() - new Date(date)) / (1000 * 60 * 60 * 24));
+    if (filterPeriod === 'today') return daysDiff === 0;
+    if (filterPeriod === 'week') return daysDiff <= 7;
+    if (filterPeriod === 'month') return daysDiff <= 30;
+    if (filterPeriod === 'quarter') return daysDiff <= 90;
+    if (filterPeriod === 'year') return daysDiff <= 365;
+    return true;
+  };
+
+  const matchesYear = (date) => {
+    if (!filterYear) return true;
+    const year = date ? new Date(date).getFullYear() : null;
+    return year === parseInt(filterYear, 10);
+  };
+
+  const filteredSubmissions = (filterStatus === 'all'
+    ? submissions
+    : submissions.filter((s) => s.status === filterStatus))
+    .filter((s) => s.status !== 'draft')
+    .filter((s) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesName = s.principalInvestigator?.toLowerCase().includes(query);
@@ -225,24 +332,7 @@ function AdminPanel({ user, onLogout }) {
         const matchesId = (s.submissionId || `#${s.id}`).toLowerCase().includes(query);
         if (!matchesName && !matchesEmail && !matchesTitle && !matchesId) return false;
       }
-      // Year filter
-      if (filterYear) {
-        const submissionYear = s.submittedDate ? new Date(s.submittedDate).getFullYear() : null;
-        if (submissionYear !== parseInt(filterYear)) return false;
-      }
-      // Time period filter
-      if (filterPeriod !== 'all' && s.submittedDate) {
-        const submissionDate = new Date(s.submittedDate);
-        const now = new Date();
-        const daysDiff = Math.floor((now - submissionDate) / (1000 * 60 * 60 * 24));
-        
-        if (filterPeriod === 'today' && daysDiff !== 0) return false;
-        if (filterPeriod === 'week' && daysDiff > 7) return false;
-        if (filterPeriod === 'month' && daysDiff > 30) return false;
-        if (filterPeriod === 'quarter' && daysDiff > 90) return false;
-        if (filterPeriod === 'year' && daysDiff > 365) return false;
-      }
-      return true;
+      return matchesYear(s.submittedDate) && matchesPeriod(s.submittedDate);
     });
 
   const filteredPublicationApps = (filterStatus === 'all'
@@ -257,21 +347,7 @@ function AdminPanel({ user, onLogout }) {
         const matchesId = (s.applicationId || '').toLowerCase().includes(query);
         if (!matchesName && !matchesTitle && !matchesId) return false;
       }
-      if (filterYear) {
-        const year = s.submittedDate ? new Date(s.submittedDate).getFullYear() : null;
-        if (year !== parseInt(filterYear, 10)) return false;
-      }
-      if (filterPeriod !== 'all' && s.submittedDate) {
-        const submissionDate = new Date(s.submittedDate);
-        const now = new Date();
-        const daysDiff = Math.floor((now - submissionDate) / (1000 * 60 * 60 * 24));
-        if (filterPeriod === 'today' && daysDiff !== 0) return false;
-        if (filterPeriod === 'week' && daysDiff > 7) return false;
-        if (filterPeriod === 'month' && daysDiff > 30) return false;
-        if (filterPeriod === 'quarter' && daysDiff > 90) return false;
-        if (filterPeriod === 'year' && daysDiff > 365) return false;
-      }
-      return true;
+      return matchesYear(s.submittedDate) && matchesPeriod(s.submittedDate);
     });
 
   const stats = computeStats(submissions);
@@ -284,6 +360,7 @@ function AdminPanel({ user, onLogout }) {
   const openAssignModal = (item, type) => {
     setSelectedApplicationType(type);
     setSelectedSubmission(item);
+    setSelectedAssignReviewerId('');
     setShowAssignModal(true);
   };
 
@@ -293,596 +370,475 @@ function AdminPanel({ user, onLogout }) {
     setShowReviewModal(true);
   };
 
+  const renderApplicationRows = () =>
+    activeList.map((item) => {
+      const id = item._id || item.id;
+      const idLabel = isPublicationTab
+        ? item.applicationId
+        : item.submissionId || `MCMSS-MREC ${item.id}/${new Date(item.submittedDate || Date.now()).getFullYear()}`;
+      const title = isPublicationTab ? item.manuscriptTitle || 'Untitled' : item.researchTitle || 'Untitled Research';
+      const person = isPublicationTab ? item.applicantName : item.principalInvestigator;
+      const basePath = isPublicationTab ? '/publication-funding' : '/submission';
+      const type = isPublicationTab ? 'publication' : 'ethics';
+      return (
+        <TableRow key={id}>
+          <TableCell className="font-mono text-xs text-muted-foreground">{idLabel}</TableCell>
+          <TableCell className="max-w-xs font-medium whitespace-normal">{title}</TableCell>
+          <TableCell>{person}</TableCell>
+          <TableCell>
+            <StatusBadge status={item.status} />
+          </TableCell>
+          <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
+          <TableCell>
+            {item.assignedReviewer || <span className="text-muted-foreground">Not assigned</span>}
+          </TableCell>
+          <TableCell>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
+                View
+              </Button>
+              {item.status === 'under_review' && !item.assignedReviewer && (
+                <Button size="sm" onClick={() => openAssignModal(item, type)}>
+                  Assign
+                </Button>
+              )}
+              {item.status === 'under_review' && item.assignedReviewer && (
+                <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
+                  Review
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" title="Export" onClick={() => handleExport(id, type)}>
+                <Download />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      );
+    });
+
   const renderApplicationsView = () => (
-    <>
-      <div className="dashboard-tabs" style={{ marginBottom: '1rem' }}>
-        <button type="button" className={`dashboard-tab ${applicationTab === 'ethics' ? 'active' : ''}`} onClick={() => setApplicationTab('ethics')}>
-          Ethics Submissions ({submissions.length})
-        </button>
-        <button type="button" className={`dashboard-tab ${applicationTab === 'publication' ? 'active' : ''}`} onClick={() => setApplicationTab('publication')}>
-          Publication Funding ({publicationApps.length})
-        </button>
-      </div>
-      <div className="admin-stats">
-        <div className="stat-card">
-          <div className="stat-value">{activeStats.total - activeStats.draft}</div>
-          <div className="stat-label">{isPublicationTab ? 'Total Applications' : 'Total Submissions'}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{activeStats.under_review}</div>
-          <div className="stat-label">Under Review</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{activeStats.approved}</div>
-          <div className="stat-label">Approved</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{activeStats.revisions_required}</div>
-          <div className="stat-label">Revisions Required</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{activeStats.rejected}</div>
-          <div className="stat-label">Rejected</div>
-        </div>
+    <div className="space-y-6">
+      <Tabs value={applicationTab} onValueChange={setApplicationTab}>
+        <TabsList>
+          <TabsTrigger value="ethics">Ethics Submissions ({submissions.length})</TabsTrigger>
+          <TabsTrigger value="publication">Publication Funding ({publicationApps.length})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard value={activeStats.total - activeStats.draft} label={isPublicationTab ? 'Total Applications' : 'Total Submissions'} />
+        <StatCard value={activeStats.under_review} label="Under Review" />
+        <StatCard value={activeStats.approved} label="Approved" />
+        <StatCard value={activeStats.revisions_required} label="Revisions Required" />
+        <StatCard value={activeStats.rejected} label="Rejected" />
       </div>
 
-      <div className="card">
-        <div className="admin-header">
-          <h2>All Applications</h2>
-        </div>
-
-        {/* Enhanced Filters */}
-        <div className="filters-container">
-          <div className="filter-row">
-            <div className="filter-item">
-              <label>Search</label>
-              <input
-                type="text"
-                className="form-control search-input"
-                placeholder={isPublicationTab ? 'Search by ID, applicant, or title...' : 'Search by ID, name, email, or title...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="border-b p-4">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Search</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder={isPublicationTab ? 'ID, applicant, or title...' : 'ID, name, email, or title...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="filter-item">
-              <label>Status</label>
-              <select
-                className="form-control"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="under_review">Under Review</option>
-                <option value="approved">Approved</option>
-                <option value="revisions_required">Revisions Required</option>
-                <option value="rejected">Rejected</option>
-              </select>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="under_review">Under Review</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="revisions_required">Revisions Required</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="filter-item">
-              <label>Year</label>
-              <select
-                className="form-control"
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Year</Label>
+              <Select
+                value={filterYear || 'all'}
+                onValueChange={(v) => setFilterYear(v === 'all' ? '' : v)}
               >
-                <option value="">All Years</option>
-                {activeYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {activeYears.map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="filter-item">
-              <label>Time Period</label>
-              <select
-                className="form-control"
-                value={filterPeriod}
-                onChange={(e) => setFilterPeriod(e.target.value)}
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last 30 Days</option>
-                <option value="quarter">Last 90 Days</option>
-                <option value="year">Last Year</option>
-              </select>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Time Period</Label>
+              <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">Last 7 Days</SelectItem>
+                  <SelectItem value="month">Last 30 Days</SelectItem>
+                  <SelectItem value="quarter">Last 90 Days</SelectItem>
+                  <SelectItem value="year">Last Year</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="loading">Loading applications...</div>
+          <div className="p-10 text-center text-sm text-muted-foreground">Loading applications...</div>
         ) : activeList.length === 0 ? (
-          <div className="empty-state">
-            <h3>No {isPublicationTab ? 'applications' : 'submissions'} found</h3>
+          <div className="p-14 text-center">
+            <h3 className="text-base font-semibold text-foreground">
+              No {isPublicationTab ? 'applications' : 'submissions'} found
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters.</p>
           </div>
-        ) : isPublicationTab ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Manuscript Title</th>
-                <th>Applicant</th>
-                <th>Status</th>
-                <th>Submitted Date</th>
-                <th>Assigned Reviewer</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeList.map((app) => (
-                <tr key={app._id || app.id}>
-                  <td>{app.applicationId}</td>
-                  <td>{app.manuscriptTitle || 'Untitled'}</td>
-                  <td>{app.applicantName}</td>
-                  <td>
-                    <span className={getStatusClass(app.status)}>
-                      {app.status.replaceAll('_', ' ').toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{formatDate(app.submittedDate)}</td>
-                  <td>{app.assignedReviewer || <span style={{ color: '#6c757d' }}>Not assigned</span>}</td>
-                  <td>
-                    <div className="action-buttons">
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => navigate(`/publication-funding/${app._id || app.id}`)}
-                      >
-                        View
-                      </button>
-                      {app.status === 'under_review' && !app.assignedReviewer && (
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => openAssignModal(app, 'publication')}
-                        >
-                          Assign Reviewer
-                        </button>
-                      )}
-                      {app.status === 'under_review' && app.assignedReviewer && (
-                        <button
-                          className="btn btn-success"
-                          onClick={() => openReviewModal(app, 'publication')}
-                        >
-                          Review
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleExport(app._id || app.id, 'publication')}
-                      >
-                        Export
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Research Title</th>
-                <th>Principal Investigator</th>
-                <th>Status</th>
-                <th>Submitted Date</th>
-                <th>Assigned Reviewer</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSubmissions.map((submission) => (
-                  <tr key={submission._id || submission.id}>
-                    <td>{submission.submissionId || `MCMSS-MREC ${submission.id}/${new Date(submission.submittedDate || Date.now()).getFullYear()}`}</td>
-                  <td>{submission.researchTitle || 'Untitled Research'}</td>
-                  <td>{submission.principalInvestigator}</td>
-                  <td>
-                    <span className={getStatusClass(submission.status)}>
-                      {submission.status.replaceAll('_', ' ').toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{formatDate(submission.submittedDate)}</td>
-                  <td>{submission.assignedReviewer || <span style={{ color: '#6c757d' }}>Not assigned</span>}</td>
-                  <td>
-                    <div className="action-buttons">
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => navigate(`/submission/${submission._id || submission.id}`)}
-                      >
-                        View
-                      </button>
-                      {submission.status === 'under_review' && !submission.assignedReviewer && (
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => openAssignModal(submission, 'ethics')}
-                        >
-                          Assign Reviewer
-                        </button>
-                      )}
-                      {submission.status === 'under_review' && submission.assignedReviewer && (
-                        <button
-                          className="btn btn-success"
-                          onClick={() => openReviewModal(submission, 'ethics')}
-                        >
-                          Review
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => handleExport(submission._id || submission.id)}
-                      >
-                        Export
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>{isPublicationTab ? 'Manuscript Title' : 'Research Title'}</TableHead>
+                <TableHead>{isPublicationTab ? 'Applicant' : 'Principal Investigator'}</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Submitted Date</TableHead>
+                <TableHead>Assigned Reviewer</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>{renderApplicationRows()}</TableBody>
+          </Table>
         )}
-      </div>
-    </>
-  );
-
-  const renderUsersView = () => (
-    <div className="card">
-      <h2>Users Management</h2>
-      <div className="empty-state">
-        <h3>Users Management</h3>
-        <p>Manage users, roles, and permissions from here.</p>
-        <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '1rem' }}>
-          This feature will be implemented to manage all platform users, their roles, and access permissions.
-        </p>
-      </div>
+      </Card>
     </div>
   );
 
   const renderAdministrationView = () => (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2>Administration</h2>
-          <p style={{ color: '#6c757d', marginTop: '0.5rem' }}>
+          <h2 className="text-xl font-semibold text-foreground">Administration</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage reviewer assignments and administrative tasks.
           </p>
         </div>
-        <button 
-          className="btn btn-primary"
-          onClick={openAddReviewerModal}
-        >
-          + Add Reviewer
-        </button>
-      </div>
-      
-      <div className="card" style={{ marginBottom: '2rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: '#3d283a' }}>Reviewer Assignment</h3>
-        <p style={{ color: '#6c757d', marginBottom: '1.5rem' }}>
-          Assign reviewers to submissions that are under review. You can also manage reviewer assignments directly from the Applications view.
-        </p>
-        <div className="empty-state" style={{ padding: '2rem' }}>
-          <p>Use the "Assign Reviewer" button in the Applications view to assign reviewers to specific submissions.</p>
-        </div>
+        <Button onClick={openAddReviewerModal}>
+          <Plus />
+          Add Reviewer
+        </Button>
       </div>
 
-      <div className="card">
-        <h3 style={{ marginBottom: '1rem', color: '#3d283a' }}>Available Reviewers</h3>
+      <Card>
+        <CardContent className="space-y-2">
+          <h3 className="font-semibold text-plum">Reviewer Assignment</h3>
+          <p className="text-sm text-muted-foreground">
+            Use the "Assign" button in the Applications view to assign reviewers to submissions under review.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden py-0">
+        <div className="border-b p-4">
+          <h3 className="font-semibold text-plum">Available Reviewers</h3>
+        </div>
         {reviewers.length === 0 ? (
-          <div className="empty-state">
-            <p>No reviewers available</p>
-          </div>
+          <div className="p-10 text-center text-sm text-muted-foreground">No reviewers available</div>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Specialization</th>
-                <th>Email</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Specialization</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {reviewers.map((reviewer) => (
-                <tr key={reviewer._id || reviewer.id}>
-                  <td>{reviewer.name}</td>
-                  <td>{reviewer.specialization || '—'}</td>
-                  <td>{reviewer.email || 'N/A'}</td>
-                  <td>
-                    <div className="action-buttons">
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => openEditReviewerModal(reviewer)}
-                      >
+                <TableRow key={reviewer._id || reviewer.id}>
+                  <TableCell className="font-medium">{reviewer.name}</TableCell>
+                  <TableCell>{reviewer.specialization || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{reviewer.email || 'N/A'}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditReviewerModal(reviewer)}>
                         Edit
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-sm btn-danger"
-                        onClick={() => handleDeleteReviewer(reviewer)}
-                      >
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => setReviewerToDeactivate(reviewer)}>
                         Deactivate
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
     </div>
   );
 
-  const renderReportsView = () => (
-    <div className="card">
-      <h2>Reports & Analytics</h2>
-      <div className="empty-state">
-        <h3>Reports & Analytics</h3>
-        <p>View detailed reports and analytics about submissions, reviews, and platform usage.</p>
-        <p style={{ color: '#6c757d', fontSize: '0.9rem', marginTop: '1rem' }}>
-          This section will provide comprehensive reports, statistics, and analytics for administrative insights.
-        </p>
+  const reviewerFields = (
+    <div className="space-y-4">
+      {reviewerFormError && (
+        <Alert variant="destructive">
+          <AlertDescription>{reviewerFormError}</AlertDescription>
+        </Alert>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="reviewer-name">Name *</Label>
+        <Input
+          id="reviewer-name"
+          value={reviewerForm.name}
+          onChange={(e) => setReviewerForm({ ...reviewerForm, name: e.target.value })}
+          placeholder="Reviewer full name"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="reviewer-email">Email *</Label>
+        <Input
+          id="reviewer-email"
+          type="email"
+          value={reviewerForm.email}
+          onChange={(e) => setReviewerForm({ ...reviewerForm, email: e.target.value })}
+          placeholder="reviewer@example.com"
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="reviewer-spec">Specialization</Label>
+        <Input
+          id="reviewer-spec"
+          value={reviewerForm.specialization}
+          onChange={(e) => setReviewerForm({ ...reviewerForm, specialization: e.target.value })}
+          placeholder="e.g. Clinical Research, Ethics"
+        />
       </div>
     </div>
   );
 
   return (
-    <div className="admin-panel-wrapper">
-      <header className="header">
-        <div className="header-content">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button
-              className="sidebar-toggle-btn"
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#442D40] text-white dark:border-border dark:bg-card dark:text-foreground">
+        <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/10 hover:text-white dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <span className="toggle-icon">{sidebarCollapsed ? '☰' : '←'}</span>
-            </button>
-            <div className="header-brand">
-              <h1>Admin Panel</h1>
-              <span className="header-subtitle">Research and Studies Committee</span>
+              {sidebarCollapsed ? <PanelLeft /> : <PanelLeftClose />}
+            </Button>
+            <div className="flex flex-col">
+              <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg dark:text-foreground">Admin Panel</h1>
+              <span className="text-xs text-white/60 dark:text-muted-foreground">Research and Studies Committee</span>
             </div>
           </div>
-          <div className="header-user">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle className="text-white hover:bg-white/10 hover:text-white dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground" />
             <UserMenu user={user} onLogout={onLogout} />
           </div>
         </div>
       </header>
 
-      <div className={`admin-layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Side Navigation */}
-        <aside className={`admin-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <nav className="sidebar-nav">
-            <button
-              className={`sidebar-nav-item ${activeSection === 'applications' ? 'active' : ''}`}
-              onClick={() => setActiveSection('applications')}
-              title="All Applications"
-            >
-              <span className="nav-icon">📋</span>
-              {!sidebarCollapsed && <span>All Applications</span>}
-            </button>
-            <button
-              className={`sidebar-nav-item ${activeSection === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveSection('users')}
-              title="Users"
-            >
-              <span className="nav-icon">👥</span>
-              {!sidebarCollapsed && <span>Users</span>}
-            </button>
-            <button
-              className={`sidebar-nav-item ${activeSection === 'administration' ? 'active' : ''}`}
-              onClick={() => setActiveSection('administration')}
-              title="Administration"
-            >
-              <span className="nav-icon">⚙️</span>
-              {!sidebarCollapsed && <span>Administration</span>}
-            </button>
-            <button
-              className={`sidebar-nav-item ${activeSection === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveSection('reports')}
-              title="Reports & Analytics"
-            >
-              <span className="nav-icon">📊</span>
-              {!sidebarCollapsed && <span>Reports & Analytics</span>}
-            </button>
+      <div className="flex">
+        <aside
+          className={cn(
+            'sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 border-r border-white/10 bg-[#442D40] p-3 transition-all sm:block dark:border-border dark:bg-card',
+            sidebarCollapsed ? 'w-16' : 'w-60'
+          )}
+        >
+          <nav className="flex flex-col gap-1">
+            {NAV_ITEMS.map((item) => {
+              const { id, label, Icon } = item;
+              return (
+              <button
+                key={id}
+                onClick={() => setActiveSection(id)}
+                title={label}
+                className={cn(
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  activeSection === id
+                    ? 'bg-white/15 text-white dark:bg-primary/10 dark:text-primary'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-foreground',
+                  sidebarCollapsed && 'justify-center px-0'
+                )}
+              >
+                <Icon className="size-5 shrink-0" />
+                {!sidebarCollapsed && <span>{label}</span>}
+              </button>
+              );
+            })}
           </nav>
         </aside>
 
-        {/* Main Content */}
-        <main className="admin-main-content">
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
           {activeSection === 'applications' && renderApplicationsView()}
-          {activeSection === 'users' && renderUsersView()}
+          {activeSection === 'users' && (
+            <ComingSoon
+              title="Users Management"
+              description="Manage users, roles, and permissions from here."
+              detail="This feature will be implemented to manage all platform users, their roles, and access permissions."
+            />
+          )}
           {activeSection === 'administration' && renderAdministrationView()}
-          {activeSection === 'reports' && renderReportsView()}
+          {activeSection === 'reports' && (
+            <ComingSoon
+              title="Reports & Analytics"
+              description="View detailed reports and analytics about submissions, reviews, and platform usage."
+              detail="This section will provide comprehensive reports, statistics, and analytics for administrative insights."
+            />
+          )}
         </main>
       </div>
 
       {/* Assign Reviewer Modal */}
-      {showAssignModal && selectedSubmission && (
-        <div className="modal-overlay" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Assign Reviewer</h3>
-            <p><strong>{selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:</strong>{' '}
+      <Dialog open={showAssignModal} onOpenChange={(o) => { setShowAssignModal(o); if (!o) setSelectedAssignReviewerId(''); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Reviewer</DialogTitle>
+            <DialogDescription>
+              {selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:{' '}
               {selectedApplicationType === 'publication'
-                ? selectedSubmission.manuscriptTitle
-                : selectedSubmission.researchTitle}
-            </p>
-            <div className="form-group">
-              <label>Select Reviewer</label>
-              <select
-                className="form-control"
-                value={selectedAssignReviewerId}
-                onChange={(e) => setSelectedAssignReviewerId(e.target.value)}
-              >
-                <option value="">Select a reviewer...</option>
-                {reviewers.map((reviewer) => (
-                  <option key={reviewer._id || reviewer.id} value={reviewer._id || reviewer.id}>
-                    {reviewer.name} - {reviewer.specialization}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                disabled={!selectedAssignReviewerId}
-                onClick={() => {
-                  handleAssignReviewer(selectedSubmission._id || selectedSubmission.id, selectedAssignReviewerId);
-                  setSelectedAssignReviewerId('');
-                }}
-              >
-                Confirm
-              </button>
-            </div>
+                ? selectedSubmission?.manuscriptTitle
+                : selectedSubmission?.researchTitle}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Select Reviewer</Label>
+            <Select value={selectedAssignReviewerId} onValueChange={setSelectedAssignReviewerId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select a reviewer..." /></SelectTrigger>
+              <SelectContent>
+                {reviewers.map((reviewer) => {
+                  const rid = reviewer._id || reviewer.id;
+                  return (
+                    <SelectItem key={rid} value={String(rid)}>
+                      {reviewer.name}{reviewer.specialization ? ` — ${reviewer.specialization}` : ''}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!selectedAssignReviewerId}
+              onClick={() => handleAssignReviewer(selectedSubmission._id || selectedSubmission.id, selectedAssignReviewerId)}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Review Modal */}
-      {showReviewModal && selectedSubmission && (
-        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Submit Review</h3>
-            <p><strong>{selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:</strong>{' '}
+      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit Review</DialogTitle>
+            <DialogDescription>
+              {selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:{' '}
               {selectedApplicationType === 'publication'
-                ? selectedSubmission.manuscriptTitle
-                : selectedSubmission.researchTitle}
-            </p>
-            <div className="form-group">
-              <label>Review Status <span className="required">*</span></label>
-              <select
-                className="form-control"
-                value={reviewData.status}
-                onChange={(e) => setReviewData({ ...reviewData, status: e.target.value })}
-              >
-                <option value="approved">Approve</option>
-                <option value="revisions_required">Revisions Required</option>
-                <option value="rejected">Reject</option>
-              </select>
+                ? selectedSubmission?.manuscriptTitle
+                : selectedSubmission?.researchTitle}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Review Status *</Label>
+              <Select value={reviewData.status} onValueChange={(v) => setReviewData({ ...reviewData, status: v })}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved">Approve</SelectItem>
+                  <SelectItem value="revisions_required">Revisions Required</SelectItem>
+                  <SelectItem value="rejected">Reject</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="form-group">
-              <label>Review Comments <span className="required">*</span></label>
-              <textarea
-                className="form-control"
+            <div className="space-y-2">
+              <Label>Review Comments *</Label>
+              <Textarea
                 value={reviewData.comments}
                 onChange={(e) => setReviewData({ ...reviewData, comments: e.target.value })}
-                rows="6"
+                rows={6}
                 placeholder="Enter your review comments and feedback..."
               />
             </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowReviewModal(false)}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleSubmitReview}>
-                Submit Review
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setShowReviewModal(false)}>Cancel</Button>
+            <Button onClick={handleSubmitReview}>Submit Review</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Reviewer Modal */}
-      {showAddReviewerModal && (
-        <div className="modal-overlay" onClick={() => setShowAddReviewerModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Add Reviewer</h3>
-            <form onSubmit={handleAddReviewer}>
-              {reviewerFormError && (
-                <div className="form-error" style={{ color: '#dc3545', marginBottom: '1rem' }}>{reviewerFormError}</div>
-              )}
-              <div className="form-group">
-                <label>Name <span className="required">*</span></label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={reviewerForm.name}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, name: e.target.value })}
-                  placeholder="Reviewer full name"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email <span className="required">*</span></label>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={reviewerForm.email}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, email: e.target.value })}
-                  placeholder="reviewer@example.com"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Specialization</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={reviewerForm.specialization}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, specialization: e.target.value })}
-                  placeholder="e.g. Clinical Research, Ethics"
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddReviewerModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Add Reviewer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={showAddReviewerModal} onOpenChange={setShowAddReviewerModal}>
+        <DialogContent>
+          <form onSubmit={handleAddReviewer}>
+            <DialogHeader>
+              <DialogTitle>Add Reviewer</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">{reviewerFields}</div>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setShowAddReviewerModal(false)}>Cancel</Button>
+              <Button type="submit">Add Reviewer</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Reviewer Modal */}
-      {showEditReviewerModal && selectedReviewer && (
-        <div className="modal-overlay" onClick={() => setShowEditReviewerModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Edit Reviewer</h3>
-            <form onSubmit={handleEditReviewer}>
-              {reviewerFormError && (
-                <div className="form-error" style={{ color: '#dc3545', marginBottom: '1rem' }}>{reviewerFormError}</div>
-              )}
-              <div className="form-group">
-                <label>Name <span className="required">*</span></label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={reviewerForm.name}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, name: e.target.value })}
-                  placeholder="Reviewer full name"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email <span className="required">*</span></label>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={reviewerForm.email}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, email: e.target.value })}
-                  placeholder="reviewer@example.com"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Specialization</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={reviewerForm.specialization}
-                  onChange={(e) => setReviewerForm({ ...reviewerForm, specialization: e.target.value })}
-                  placeholder="e.g. Clinical Research, Ethics"
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEditReviewerModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={showEditReviewerModal} onOpenChange={setShowEditReviewerModal}>
+        <DialogContent>
+          <form onSubmit={handleEditReviewer}>
+            <DialogHeader>
+              <DialogTitle>Edit Reviewer</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">{reviewerFields}</div>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setShowEditReviewerModal(false)}>Cancel</Button>
+              <Button type="submit">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deactivate Reviewer Confirmation */}
+      <Dialog open={!!reviewerToDeactivate} onOpenChange={(o) => { if (!o) setReviewerToDeactivate(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate Reviewer</DialogTitle>
+            <DialogDescription>
+              Deactivate <span className="font-medium text-foreground">{reviewerToDeactivate?.name}</span>? They will no
+              longer appear in the reviewers list or be available for new assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setReviewerToDeactivate(null)} disabled={deactivating}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeactivateReviewer} disabled={deactivating}>
+              {deactivating ? 'Deactivating...' : 'Deactivate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { forgotPassword } from '../utils/api';
 import AuthLayout from './AuthLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -32,20 +37,29 @@ function ForgotPassword() {
 
   return (
     <AuthLayout title="Forgot Password" subtitle="We'll send you a reset link">
-      <form onSubmit={handleSubmit} className="login-form">
-        {error && <div className="alert alert-error">{error}</div>}
-        {success && <div className="alert alert-success">{success}</div>}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
 
-        <p className="auth-hint">
+        <p className="text-sm text-muted-foreground">
           Enter your email address and we'll send you a link to reset your password.
         </p>
 
-        <div className="form-group">
-          <label htmlFor="email">Email Address</label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="email">Email Address</Label>
+          <Input
             type="email"
             id="email"
-            className="form-control"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -53,22 +67,17 @@ function ForgotPassword() {
           />
         </div>
 
-        <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-          {loading ? (
-            <span className="btn-loading">
-              <span className="spinner"></span>
-              Sending...
-            </span>
-          ) : (
-            'Send Reset Link'
-          )}
-        </button>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="animate-spin" />}
+          {loading ? 'Sending...' : 'Send Reset Link'}
+        </Button>
 
-        <div className="auth-toggle">
-          <p>
-            Remember your password? <Link to="/login" className="link-button">Back to Login</Link>
-          </p>
-        </div>
+        <p className="text-center text-sm text-muted-foreground">
+          Remember your password?{' '}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Back to Login
+          </Link>
+        </p>
       </form>
     </AuthLayout>
   );

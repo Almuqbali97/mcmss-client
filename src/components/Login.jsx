@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { login, signupStep1, verifySignup, resendSignupOTP } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AuthLayout from './AuthLayout';
+import PasswordInput from './PasswordInput';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 function Login({ onLogin }) {
   const [isSignup, setIsSignup] = useState(false);
@@ -17,9 +23,6 @@ function Login({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [showSignupConfirm, setShowSignupConfirm] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -134,9 +137,6 @@ function Login({ onLogin }) {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
-    setShowPassword(false);
-    setShowSignupPassword(false);
-    setShowSignupConfirm(false);
     setFirstName('');
     setLastName('');
     setOtp('');
@@ -149,200 +149,60 @@ function Login({ onLogin }) {
     setOtp('');
   };
 
+  const feedback = (
+    <>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {success && (
+        <Alert variant="success">
+          <CheckCircle2 />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+    </>
+  );
+
+  const title = isSignup ? (signupStep === 1 ? 'Create Account' : 'Verify Email') : 'Sign In';
+
   return (
-    <AuthLayout
-      title={isSignup ? (signupStep === 1 ? 'Create Account' : 'Verify Email') : 'Sign In'}
-      subtitle="Access your application portal"
-    >
+    <AuthLayout title={title} subtitle="Access your application portal">
+      {isSignup ? (
+        signupStep === 1 ? (
+          <form onSubmit={handleSignupStep1} className="space-y-5">
+            {feedback}
 
-        {isSignup ? (
-          signupStep === 1 ? (
-            <form onSubmit={handleSignupStep1} className="login-form">
-              {error && <div className="alert alert-error">{error}</div>}
-              {success && <div className="alert alert-success">{success}</div>}
-
-              <div className="form-group">
-                <label htmlFor="firstName">First Name</label>
-                <input
-                  type="text"
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name</Label>
+                <Input
                   id="firstName"
-                  className="form-control"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
-                  placeholder="Enter your first name"
+                  placeholder="First name"
                 />
               </div>
-
-              <div className="form-group">
-                <label htmlFor="lastName">Last Name</label>
-                <input
-                  type="text"
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input
                   id="lastName"
-                  className="form-control"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
-                  placeholder="Enter your last name"
+                  placeholder="Last name"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label htmlFor="signup-email">Email Address</label>
-                <input
-                  type="email"
-                  id="signup-email"
-                  className="form-control"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="Enter your email"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="signup-password">Password</label>
-                <div className="password-input-wrap">
-                  <input
-                    type={showSignupPassword ? 'text' : 'password'}
-                    id="signup-password"
-                    className="form-control"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="Enter your password (min. 6 characters)"
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    className="password-toggle-btn"
-                    onClick={() => setShowSignupPassword(!showSignupPassword)}
-                    aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
-                    tabIndex={-1}
-                  >
-                    {showSignupPassword ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirm-password">Confirm Password</label>
-                <div className="password-input-wrap">
-                  <input
-                    type={showSignupConfirm ? 'text' : 'password'}
-                    id="confirm-password"
-                    className="form-control"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="Confirm your password"
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    className="password-toggle-btn"
-                    onClick={() => setShowSignupConfirm(!showSignupConfirm)}
-                    aria-label={showSignupConfirm ? 'Hide password' : 'Show password'}
-                    tabIndex={-1}
-                  >
-                    {showSignupConfirm ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-                {loading ? (
-                  <span className="btn-loading">
-                    <span className="spinner"></span>
-                    Sending verification code...
-                  </span>
-                ) : (
-                  'Continue'
-                )}
-              </button>
-
-              <div className="auth-toggle">
-                <p>Already have an account? <button type="button" onClick={toggleMode} className="link-button">Login</button></p>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifySignup} className="login-form">
-              {error && <div className="alert alert-error">{error}</div>}
-              {success && <div className="alert alert-success">{success}</div>}
-
-              <p className="auth-hint">
-                We sent a 6-digit code to <strong>{email}</strong>
-              </p>
-
-              <div className="form-group">
-                <label htmlFor="otp">Verification Code</label>
-                <input
-                  type="text"
-                  id="otp"
-                  className="form-control"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary btn-block" disabled={loading || otp.length !== 6}>
-                {loading ? (
-                  <span className="btn-loading">
-                    <span className="spinner"></span>
-                    Verifying...
-                  </span>
-                ) : (
-                  'Verify & Create Account'
-                )}
-              </button>
-
-              <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                <button
-                  type="button"
-                  onClick={handleResendOTP}
-                  disabled={resendCooldown > 0 || loading}
-                  className="link-button"
-                  style={{ fontSize: '0.9rem' }}
-                >
-                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend verification code'}
-                </button>
-              </div>
-
-              <div className="auth-toggle" style={{ marginTop: '1rem' }}>
-                <button type="button" onClick={goBackToSignupForm} className="link-button">
-                  ← Back to signup form
-                </button>
-              </div>
-
-              <div className="auth-toggle">
-                <p>Already have an account? <button type="button" onClick={toggleMode} className="link-button">Login</button></p>
-              </div>
-            </form>
-          )
-        ) : (
-          <form onSubmit={handleLogin} className="login-form">
-            {error && <div className="alert alert-error">{error}</div>}
-            {success && <div className="alert alert-success">{success}</div>}
-
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="signup-email">Email Address</Label>
+              <Input
                 type="email"
-                id="email"
-                className="form-control"
+                id="signup-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -350,55 +210,139 @@ function Login({ onLogin }) {
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <div className="password-input-wrap">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  className="form-control"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Enter your password"
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  )}
-                </button>
-              </div>
-              <div className="password-row">
-                <Link to="/forgot-password" className="link-button" style={{ fontSize: '0.85rem' }}>
-                  Forgot password?
-                </Link>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="signup-password">Password</Label>
+              <PasswordInput
+                id="signup-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="Min. 6 characters"
+              />
             </div>
 
-            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-              {loading ? (
-                <span className="btn-loading">
-                  <span className="spinner"></span>
-                  Logging in...
-                </span>
-              ) : (
-                'Login'
-              )}
-            </button>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <PasswordInput
+                id="confirm-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="Confirm your password"
+              />
+            </div>
 
-            <div className="auth-toggle">
-              <p>Don't have an account? <button type="button" onClick={toggleMode} className="link-button">Create Account</button></p>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? 'Sending verification code...' : 'Continue'}
+            </Button>
+
+            <p className="text-center text-sm text-muted-foreground">
+              Already have an account?{' '}
+              <button type="button" onClick={toggleMode} className="font-medium text-primary hover:underline">
+                Login
+              </button>
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifySignup} className="space-y-5">
+            {feedback}
+
+            <p className="text-sm text-muted-foreground">
+              We sent a 6-digit code to <strong className="text-foreground">{email}</strong>
+            </p>
+
+            <div className="space-y-2">
+              <Label htmlFor="otp">Verification Code</Label>
+              <Input
+                id="otp"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+                placeholder="Enter 6-digit code"
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="text-center text-lg tracking-[0.5em]"
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading || otp.length !== 6}>
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? 'Verifying...' : 'Verify & Create Account'}
+            </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleResendOTP}
+                disabled={resendCooldown > 0 || loading}
+                className="text-sm font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+              >
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend verification code'}
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-2 text-sm">
+              <button type="button" onClick={goBackToSignupForm} className="font-medium text-muted-foreground hover:text-foreground">
+                ← Back to signup form
+              </button>
+              <p className="text-muted-foreground">
+                Already have an account?{' '}
+                <button type="button" onClick={toggleMode} className="font-medium text-primary hover:underline">
+                  Login
+                </button>
+              </p>
             </div>
           </form>
-        )}
+        )
+      ) : (
+        <form onSubmit={handleLogin} className="space-y-5">
+          {feedback}
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address</Label>
+            <Input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Enter your email"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <PasswordInput
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
+            />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />}
+            {loading ? 'Logging in...' : 'Login'}
+          </Button>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Don't have an account?{' '}
+            <button type="button" onClick={toggleMode} className="font-medium text-primary hover:underline">
+              Create Account
+            </button>
+          </p>
+        </form>
+      )}
     </AuthLayout>
   );
 }

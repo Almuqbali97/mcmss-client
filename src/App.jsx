@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { logout } from './utils/api';
 import { getDefaultRouteForRole } from './utils/roleRoutes';
 import LandingPage from './components/LandingPage';
@@ -13,22 +13,20 @@ import ViewSubmission from './components/ViewSubmission';
 import PublicationFundingForm from './components/publicationFunding/PublicationFundingForm';
 import ViewPublicationFunding from './components/ViewPublicationFunding';
 import ChangePassword from './components/ChangePassword';
-import './App.css';
+import { Toaster } from '@/components/ui/sonner';
 
 function App() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('user');
     const accessToken = localStorage.getItem('accessToken');
     if (savedUser && accessToken) {
-      setUser(JSON.parse(savedUser));
-    } else {
-      localStorage.removeItem('user');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      return JSON.parse(savedUser);
     }
-  }, []);
+    localStorage.removeItem('user');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    return null;
+  });
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -38,7 +36,9 @@ function App() {
   const handleLogout = async () => {
     try {
       await logout();
-    } catch {}
+    } catch {
+      /* best-effort logout */
+    }
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('accessToken');
@@ -49,6 +49,7 @@ function App() {
 
   return (
     <Router>
+      <Toaster />
       <div className="app">
         <Routes>
           <Route

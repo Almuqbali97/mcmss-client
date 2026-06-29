@@ -1,16 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ClipboardList, BookOpen, Plus } from 'lucide-react';
 import { getSubmissions, getPublicationFundingApplications } from '../utils/api';
-import UserMenu from './UserMenu';
-import './Dashboard.css';
+import AppHeader from './AppHeader';
+import { StatusBadge } from './StatusBadge';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const FORM_TYPES = [
   {
     id: 'ethics',
     title: 'Research Ethics Approval',
     description: 'Submit a new application for medical research ethics committee review. Covers study design, ethical considerations, and research proposals.',
-    icon: '📋',
-    accent: 'ethics',
+    Icon: ClipboardList,
     newRoute: '/submission/new',
     countLabel: 'submission',
   },
@@ -18,8 +37,7 @@ const FORM_TYPES = [
     id: 'publication-funding',
     title: 'Publication Funding',
     description: 'Apply for reimbursement of article processing charges, open-access fees, and related publication costs after manuscript acceptance.',
-    icon: '📄',
-    accent: 'publication',
+    Icon: BookOpen,
     newRoute: '/publication-funding/new',
     countLabel: 'application',
   },
@@ -28,26 +46,31 @@ const FORM_TYPES = [
 const EDITABLE_STATUSES = ['draft', 'revisions_required'];
 
 function FormTypeCard({ form, count, onStart, onViewApplications }) {
+  const { Icon } = form;
   return (
-    <article className={`form-type-card form-type-card--${form.accent}`}>
-      <span className="form-type-card-icon" aria-hidden>{form.icon}</span>
-      <div className="form-type-card-body">
-        <h3 className="form-type-card-title">{form.title}</h3>
-        <p className="form-type-card-description">{form.description}</p>
-        <p className="form-type-card-meta">
+    <Card className="transition-shadow hover:shadow-md">
+      <CardHeader>
+        <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Icon className="size-5" />
+        </div>
+        <CardTitle className="mt-3 text-lg">{form.title}</CardTitle>
+        <CardDescription>{form.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1">
+        <p className="text-sm font-medium text-muted-foreground">
           {count} {count === 1 ? form.countLabel : `${form.countLabel}s`}
         </p>
-      </div>
-      <div className="form-type-card-actions">
-        <button type="button" className="btn btn-primary" onClick={onStart}>
+      </CardContent>
+      <CardFooter className="gap-2">
+        <Button onClick={onStart}>
+          <Plus />
           Start New
-        </button>
-        <button type="button" className="btn btn-outline" onClick={onViewApplications} disabled={count === 0}>
+        </Button>
+        <Button variant="outline" onClick={onViewApplications} disabled={count === 0}>
           View All
-        </button>
-      
-      </div>
-    </article>
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -78,8 +101,6 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
-  const getStatusClass = (status) => `status-badge status-${status}`;
-
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -104,119 +125,126 @@ function Dashboard({ user, onLogout }) {
     'publication-funding': publicationApps.length,
   };
 
-  const renderEthicsTable = () => (
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Research Title</th>
-          {isReviewer && <th>Principal Investigator</th>}
-          <th>Status</th>
-          <th>Submitted Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {ethicsSubmissions.map((submission) => (
-          <tr key={submission._id || submission.id}>
-            <td>
-              <div>
-                <strong>{submission.researchTitle || 'Untitled Research'}</strong>
-                <div className="table-subtext">
-                  {submission.submissionId || `MCMSS-MREC ${submission._id || submission.id}`}
-                </div>
-              </div>
-            </td>
-            {isReviewer && <td>{getInvestigatorName(submission)}</td>}
-            <td>
-              <span className={getStatusClass(submission.status)}>
-                {submission.status.replace('_', ' ').toUpperCase()}
-              </span>
-            </td>
-            <td>{formatDate(submission.submittedDate)}</td>
-            <td>
-              <div className="action-buttons">
-                <button className="btn btn-outline" onClick={() => navigate(`/submission/${submission._id || submission.id}`)}>View</button>
-                {isReviewer && submission.status === 'under_review' && (
-                  <button className="btn btn-primary" onClick={() => navigate(`/submission/${submission._id || submission.id}`)}>Review</button>
-                )}
-                {!isReviewer && EDITABLE_STATUSES.includes(submission.status) && (
-                  <button className="btn btn-secondary" onClick={() => navigate(`/submission/${submission._id || submission.id}/edit`)}>
-                    {submission.status === 'revisions_required' ? 'Revise' : 'Edit'}
-                  </button>
-                )}
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+  const renderTable = (rows, isPublication) => {
+    const titleHeader = isPublication ? 'Manuscript Title' : 'Research Title';
+    const personHeader = isPublication ? 'Applicant' : 'Principal Investigator';
+    const basePath = isPublication ? '/publication-funding' : '/submission';
 
-  const renderPublicationTable = () => (
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Manuscript Title</th>
-          {isReviewer && <th>Applicant</th>}
-          <th>Status</th>
-          <th>Submitted Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {publicationApps.map((app) => (
-          <tr key={app._id || app.id}>
-            <td>
-              <div>
-                <strong>{app.manuscriptTitle || 'Untitled'}</strong>
-                <div className="table-subtext">{app.applicationId}</div>
-              </div>
-            </td>
-            {isReviewer && <td>{getInvestigatorName(app, true)}</td>}
-            <td>
-              <span className={getStatusClass(app.status)}>{app.status.replace('_', ' ').toUpperCase()}</span>
-            </td>
-            <td>{formatDate(app.submittedDate)}</td>
-            <td>
-              <div className="action-buttons">
-                <button className="btn btn-outline" onClick={() => navigate(`/publication-funding/${app._id || app.id}`)}>View</button>
-                {isReviewer && app.status === 'under_review' && (
-                  <button className="btn btn-primary" onClick={() => navigate(`/publication-funding/${app._id || app.id}`)}>Review</button>
-                )}
-                {!isReviewer && EDITABLE_STATUSES.includes(app.status) && (
-                  <button className="btn btn-secondary" onClick={() => navigate(`/publication-funding/${app._id || app.id}/edit`)}>
-                    {app.status === 'revisions_required' ? 'Revise' : 'Edit'}
-                  </button>
-                )}
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{titleHeader}</TableHead>
+            {isReviewer && <TableHead>{personHeader}</TableHead>}
+            <TableHead>Status</TableHead>
+            <TableHead>Submitted Date</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((item) => {
+            const id = item._id || item.id;
+            const title = isPublication
+              ? item.manuscriptTitle || 'Untitled'
+              : item.researchTitle || 'Untitled Research';
+            const subId = isPublication
+              ? item.applicationId
+              : item.submissionId || `MCMSS-MREC ${id}`;
+            return (
+              <TableRow key={id}>
+                <TableCell className="max-w-xs">
+                  <div className="font-medium text-foreground whitespace-normal">{title}</div>
+                  <div className="text-xs text-muted-foreground">{subId}</div>
+                </TableCell>
+                {isReviewer && <TableCell>{getInvestigatorName(item, isPublication)}</TableCell>}
+                <TableCell>
+                  <StatusBadge status={item.status} />
+                </TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
+                      View
+                    </Button>
+                    {isReviewer && item.status === 'under_review' && (
+                      <Button size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
+                        Review
+                      </Button>
+                    )}
+                    {!isReviewer && EDITABLE_STATUSES.includes(item.status) && (
+                      <Button variant="secondary" size="sm" onClick={() => navigate(`${basePath}/${id}/edit`)}>
+                        {item.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    );
+  };
 
-  const currentList = activeTab === 'ethics' ? ethicsSubmissions : publicationApps;
-  const activeForm = FORM_TYPES.find((f) => f.id === activeTab);
+  const renderListSection = (tabId) => {
+    const isPublication = tabId === 'publication-funding';
+    const rows = isPublication ? publicationApps : ethicsSubmissions;
+    const activeForm = FORM_TYPES.find((f) => f.id === tabId);
+    const { Icon } = activeForm;
+
+    if (loading) {
+      return (
+        <Card>
+          <CardContent className="space-y-3 py-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (rows.length === 0) {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Icon className="size-6" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">
+              {isReviewer
+                ? 'No assigned items'
+                : isPublication
+                  ? 'No publication funding applications yet'
+                  : 'No ethics submissions yet'}
+            </h3>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {isReviewer
+                ? 'Assigned items will appear here once an administrator assigns them to you.'
+                : 'Your submitted applications will appear here.'}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="overflow-hidden py-0">
+        {renderTable(rows, isPublication)}
+      </Card>
+    );
+  };
 
   return (
-    <div className="dashboard-page app-page app-page--dashboard">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-brand">
-            <h1>Research and Studies Committee</h1>
-            <span className="header-subtitle">Medical City for Military and Security Services</span>
-          </div>
-          <div className="header-user">
-            <UserMenu user={user} onLogout={onLogout} />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background">
+      <AppHeader user={user} onLogout={onLogout} />
 
-      <div className="container">
-        <section className="dashboard-intro">
-          <h2>{isReviewer ? 'Assigned Reviews' : 'Application Portal'}</h2>
-          <p>
+      <main className="mx-auto max-w-[1300px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <section>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            {isReviewer ? 'Assigned Reviews' : 'Application Portal'}
+          </h2>
+          <p className="mt-1 text-muted-foreground">
             {isReviewer
               ? 'Review submissions and publication funding applications assigned to you by the committee.'
               : 'Choose a form below to start a new application, or view your existing submissions.'}
@@ -224,67 +252,39 @@ function Dashboard({ user, onLogout }) {
         </section>
 
         {!isReviewer && (
-          <section className="form-cards-section" aria-label="Available forms">
-            <div className="form-cards-grid">
-              {FORM_TYPES.map((form) => (
-                <FormTypeCard
-                  key={form.id}
-                  form={form}
-                  count={counts[form.id]}
-                  onStart={() => navigate(form.newRoute)}
-                  onViewApplications={() => setActiveTab(form.id)}
-                />
-              ))}
-            </div>
+          <section className="grid gap-5 md:grid-cols-2" aria-label="Available forms">
+            {FORM_TYPES.map((form) => (
+              <FormTypeCard
+                key={form.id}
+                form={form}
+                count={counts[form.id]}
+                onStart={() => navigate(form.newRoute)}
+                onViewApplications={() => setActiveTab(form.id)}
+              />
+            ))}
           </section>
         )}
 
-        <section className="applications-section">
-          <div className="applications-section-header">
-            <h3>{isReviewer ? 'Your assignments' : 'My applications'}</h3>
-            <div className="dashboard-tabs">
+        <section className="space-y-4">
+          <h3 className="text-lg font-semibold text-foreground">
+            {isReviewer ? 'Your assignments' : 'My applications'}
+          </h3>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
+            <TabsList>
               {FORM_TYPES.map((form) => (
-                <button
-                  key={form.id}
-                  type="button"
-                  className={`dashboard-tab ${activeTab === form.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(form.id)}
-                >
+                <TabsTrigger key={form.id} value={form.id}>
                   {form.id === 'ethics' ? 'Ethics' : 'Publication Funding'} ({counts[form.id]})
-                </button>
+                </TabsTrigger>
               ))}
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="card applications-card">
-              <div className="loading">Loading applications...</div>
-            </div>
-          ) : currentList.length === 0 ? (
-            <div className="card applications-card applications-empty">
-              <div className="empty-state">
-                <span className="empty-state-icon" aria-hidden>{activeForm?.icon}</span>
-                <h3>
-                  {isReviewer
-                    ? 'No assigned items'
-                    : activeTab === 'ethics'
-                      ? 'No ethics submissions yet'
-                      : 'No publication funding applications yet'}
-                </h3>
-                <p>
-                  {isReviewer
-                    ? 'Assigned items will appear here once an administrator assigns them to you.'
-                    : 'Your submitted applications will appear here.'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="card applications-card">
-              {activeTab === 'ethics' ? renderEthicsTable() : renderPublicationTable()}
-            </div>
-          )}
+            </TabsList>
+            {FORM_TYPES.map((form) => (
+              <TabsContent key={form.id} value={form.id}>
+                {renderListSection(form.id)}
+              </TabsContent>
+            ))}
+          </Tabs>
         </section>
-      </div>
+      </main>
     </div>
   );
 }

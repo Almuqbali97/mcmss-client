@@ -1,6 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import './UserMenu.css';
+import { LogOut } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 const ROLE_LABELS = {
   researcher: 'Researcher',
@@ -8,45 +16,9 @@ const ROLE_LABELS = {
   admin: 'Administrator',
 };
 
-function ChevronIcon({ open }) {
-  return (
-    <svg
-      className={`user-menu-chevron ${open ? 'open' : ''}`}
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
 function UserMenu({ user, onLogout }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
-  const handleAction = (fn) => {
-    setOpen(false);
-    fn?.();
-  };
 
   const isOnDashboard = location.pathname === '/dashboard';
   const isOnAdmin = location.pathname === '/admin';
@@ -93,13 +65,6 @@ function UserMenu({ user, onLogout }) {
     });
   }
 
-  menuItems.push({
-    id: 'logout',
-    label: 'Sign out',
-    onClick: onLogout,
-    className: 'user-menu-item-logout',
-  });
-
   const displayName = user?.firstName && user?.lastName
     ? `${user.firstName} ${user.lastName}`.trim()
     : user?.name || user?.email || 'User';
@@ -113,53 +78,47 @@ function UserMenu({ user, onLogout }) {
   const roleLabel = ROLE_LABELS[user?.role] || user?.role?.replace('_', ' ') || 'User';
 
   return (
-    <div className="user-menu" ref={menuRef}>
-      <button
-        type="button"
-        className={`user-menu-trigger ${open ? 'open' : ''}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="true"
-        aria-label={`Account menu for ${displayName}`}
-      >
-        <span className="user-menu-avatar" aria-hidden="true">
-          {initials}
-        </span>
-        <span className="user-menu-identity">
-          <span className="user-menu-name">{shortName}</span>
-          <span className="user-menu-role-pill">{roleLabel}</span>
-        </span>
-        <ChevronIcon open={open} />
-      </button>
-
-      {open && (
-        <div className="user-menu-dropdown" role="menu">
-          <div className="user-menu-header">
-            <span className="user-menu-avatar user-menu-avatar--lg" aria-hidden="true">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2.5 rounded-full border border-border bg-background py-1 pl-1 pr-2.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-label={`Account menu for ${displayName}`}
+        >
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
               {initials}
-            </span>
-            <div className="user-menu-header-text">
-              <span className="user-menu-header-name">{displayName}</span>
-              <span className="user-menu-header-email">{user?.email}</span>
-            </div>
+            </AvatarFallback>
+          </Avatar>
+          <span className="hidden text-sm font-medium text-foreground sm:inline">{shortName}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <div className="flex items-center gap-3 p-2">
+          <Avatar className="size-10">
+            <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
+            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+            <Badge variant="muted" className="mt-1">{roleLabel}</Badge>
           </div>
-          <ul className="user-menu-list">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`user-menu-item ${item.className || ''}`}
-                  onClick={() => handleAction(item.onClick)}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
         </div>
-      )}
-    </div>
+        <DropdownMenuSeparator />
+        {menuItems.map((item) => (
+          <DropdownMenuItem key={item.id} onSelect={item.onClick}>
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onLogout}>
+          <LogOut />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
