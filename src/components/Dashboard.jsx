@@ -1,10 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, BookOpen, Plus } from 'lucide-react';
-import { getSubmissions, getPublicationFundingApplications } from '../utils/api';
+import { toast } from 'sonner';
+import { ClipboardList, BookOpen, Plus, Trash2, Loader2 } from 'lucide-react';
+import {
+  getSubmissions,
+  getPublicationFundingApplications,
+  deleteSubmission,
+  deletePublicationFunding,
+} from '../utils/api';
 import AppHeader from './AppHeader';
 import { StatusBadge } from './StatusBadge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Card,
   CardHeader,
@@ -79,8 +93,30 @@ function Dashboard({ user, onLogout }) {
   const [publicationApps, setPublicationApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('ethics');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const isReviewer = user.role === 'reviewer';
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      if (deleteTarget.isPublication) {
+        await deletePublicationFunding(deleteTarget.id);
+        setPublicationApps((prev) => prev.filter((x) => (x._id || x.id) !== deleteTarget.id));
+      } else {
+        await deleteSubmission(deleteTarget.id);
+        setEthicsSubmissions((prev) => prev.filter((x) => (x._id || x.id) !== deleteTarget.id));
+      }
+      toast.success('Draft deleted.');
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete draft.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -174,6 +210,16 @@ function Dashboard({ user, onLogout }) {
                     {!isReviewer && EDITABLE_STATUSES.includes(item.status) && (
                       <Button variant="secondary" size="sm" onClick={() => navigate(`${basePath}/${id}/edit`)}>
                         {item.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                      </Button>
+                    )}
+                    {!isReviewer && item.status === 'draft' && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteTarget({ id, title, isPublication })}
+                      >
+                        <Trash2 />
+                        Delete
                       </Button>
                     )}
                   </div>
@@ -285,6 +331,28 @@ function Dashboard({ user, onLogout }) {
           </Tabs>
         </section>
       </main>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete draft?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the draft
+              {deleteTarget?.title ? ` "${deleteTarget.title}"` : ''} and any files attached to it. This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

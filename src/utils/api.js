@@ -235,6 +235,10 @@ export const submitForReview = async (id) => {
   return getData(response);
 };
 
+export const deleteSubmission = async (id) => {
+  await api.delete(`/submissions/${id}`);
+};
+
 export const assignReviewer = async (id, reviewerId) => {
   const response = await api.post(`/submissions/${id}/assign-reviewer`, { reviewerId });
   return getData(response);
@@ -348,6 +352,10 @@ export const updatePublicationFunding = async (id, data) => {
 export const submitPublicationFundingForReview = async (id) => {
   const response = await api.post(`/publication-funding/${id}/submit`);
   return getData(response);
+};
+
+export const deletePublicationFunding = async (id) => {
+  await api.delete(`/publication-funding/${id}`);
 };
 
 export const assignPublicationFundingReviewer = async (id, reviewerId) => {
