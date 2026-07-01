@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectTrigger,
@@ -54,9 +55,13 @@ import {
 import {
   sanitizeFormData,
   getFileName,
-  validateStep,
+  getStepErrors,
   validateEntireForm,
+  getFirstInvalidStep,
+  describeErrorKey,
 } from './formHelpers.js';
+
+const FIELD_FILE_LIMITS = { proofOfPaymentFiles: 3 };
 
 function PublicationFundingForm({ user, onLogout }) {
   const { id } = useParams();
@@ -66,6 +71,7 @@ function PublicationFundingForm({ user, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [formData, setFormData] = useState(createInitialFormData(user));
 
   useEffect(() => {
@@ -121,13 +127,17 @@ function PublicationFundingForm({ user, onLogout }) {
   };
 
   const handleFundingItemChange = (key, subField, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      fundingItems: {
-        ...prev.fundingItems,
-        [key]: { ...prev.fundingItems[key], [subField]: value },
-      },
-    }));
+    setFormData((prev) => {
+      const item = { ...prev.fundingItems[key], [subField]: value };
+      // Clear the amount whenever the item is no longer requested.
+      if (subField === 'requested' && value !== 'Yes') {
+        item.amount = '';
+      }
+      return {
+        ...prev,
+        fundingItems: { ...prev.fundingItems, [key]: item },
+      };
+    });
   };
 
   const handleRoleToggle = (role) => {
@@ -148,9 +158,10 @@ function PublicationFundingForm({ user, onLogout }) {
 
   const handleFileChange = (field, fileList) => {
     const arr = Array.from(fileList || []);
+    const max = FIELD_FILE_LIMITS[field] || 5;
     setFormData((prev) => ({
       ...prev,
-      [field]: [...(prev[field] || []), ...arr].slice(0, 5),
+      [field]: [...(prev[field] || []), ...arr].slice(0, max),
     }));
   };
 
@@ -206,12 +217,35 @@ function PublicationFundingForm({ user, onLogout }) {
     }
   };
 
+  const showMissingToast = (errors) => {
+    const labels = [...new Set(Object.keys(errors).map(describeErrorKey))];
+    const preview = labels.slice(0, 4).join(', ');
+    const extra = labels.length > 4 ? ` and ${labels.length - 4} more` : '';
+    toast.error(`Missing or invalid: ${preview}${extra}.`);
+  };
+
   const handleNext = () => {
-    if (validateStep(currentStep, formData)) {
+    const errors = getStepErrors(currentStep, formData);
+    if (Object.keys(errors).length === 0) {
+      setFieldErrors({});
       setCurrentStep((s) => Math.min(s + 1, PF_STEPS.length));
     } else {
-      toast.error('Please fill in all required fields before proceeding.');
+      setFieldErrors(errors);
+      showMissingToast(errors);
     }
+  };
+
+  const handleSubmitClick = () => {
+    if (validateEntireForm(formData, PF_STEPS.length)) {
+      setFieldErrors({});
+      setShowConfirmModal(true);
+      return;
+    }
+    const invalidStep = getFirstInvalidStep(formData, PF_STEPS.length);
+    const errors = getStepErrors(invalidStep, formData);
+    setFieldErrors(errors);
+    setCurrentStep(invalidStep);
+    showMissingToast(errors);
   };
 
   const renderStep1 = () => (
@@ -229,7 +263,7 @@ function PublicationFundingForm({ user, onLogout }) {
           ['phone', 'Phone number', 'tel'],
           ['principalInvestigator', 'Principal Investigator (if different from applicant)', 'text'],
         ].map(([key, label, type]) => (
-          <Field key={key} label={label} required={key !== 'principalInvestigator'} htmlFor={key}>
+          <Field key={key} label={label} required={key !== 'principalInvestigator'} htmlFor={key} error={fieldErrors[key]}>
             <Input
               id={key}
               type={type}
@@ -249,12 +283,12 @@ function PublicationFundingForm({ user, onLogout }) {
         ['manuscriptTitle', 'Manuscript title'],
         ['journalName', 'Journal name'],
       ].map(([key, label]) => (
-        <Field key={key} label={label} required htmlFor={key}>
+        <Field key={key} label={label} required htmlFor={key} error={fieldErrors[key]}>
           <Input id={key} value={formData[key]} onChange={(e) => handleChange(key, e.target.value)} />
         </Field>
       ))}
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Date of acceptance" required>
+        <Field label="Date of acceptance" required error={fieldErrors.dateOfAcceptance}>
           <Input type="date" value={formData.dateOfAcceptance} onChange={(e) => handleChange('dateOfAcceptance', e.target.value)} />
         </Field>
         <Field label="Date of publication (if already published)">
@@ -267,16 +301,16 @@ function PublicationFundingForm({ user, onLogout }) {
       <Field label="Front page or research article (attachment)">
         <FileUpload field="frontPageOrArticleFiles" files={formData.frontPageOrArticleFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} />
       </Field>
-      <Field label="Scopus indexed" required>
+      <Field label="Scopus indexed" required error={fieldErrors.scopusIndexed}>
         <OptionRadioGroup value={formData.scopusIndexed} onChange={(v) => handleChange('scopusIndexed', v)} options={['Yes', 'No']} />
       </Field>
-      <Field label="Journal quartile" required>
+      <Field label="Journal quartile" required error={fieldErrors.journalQuartile}>
         <OptionRadioGroup value={formData.journalQuartile} onChange={(v) => handleChange('journalQuartile', v)} options={['Q1', 'Q2', 'Other']} />
       </Field>
       <Field label="Impact factor">
         <Input value={formData.impactFactor} onChange={(e) => handleChange('impactFactor', e.target.value)} />
       </Field>
-      <Field label="Source of quartile / impact factor data" required>
+      <Field label="Source of quartile / impact factor data" required error={fieldErrors.quartileSource || fieldErrors.quartileSourceOther}>
         <OptionRadioGroup
           value={formData.quartileSource}
           onChange={(v) => handleChange('quartileSource', v)}
@@ -292,7 +326,7 @@ function PublicationFundingForm({ user, onLogout }) {
   const renderStep3 = () => (
     <div className="space-y-5">
       <StepHeading title="Section 3: Authorship and Affiliation" />
-      <Field label="Applicant role in the manuscript" required>
+      <Field label="Applicant role in the manuscript" required error={fieldErrors.applicantRole}>
         <div className="space-y-2">
           {['First author', 'Corresponding author'].map((role) => (
             <CheckboxField
@@ -305,7 +339,7 @@ function PublicationFundingForm({ user, onLogout }) {
           ))}
         </div>
       </Field>
-      <Field label="Is Medical City for Military & Security Services clearly stated as an institutional affiliation?" required>
+      <Field label="Is Medical City for Military & Security Services clearly stated as an institutional affiliation?" required error={fieldErrors.mcmssAffiliationStated}>
         <OptionRadioGroup value={formData.mcmssAffiliationStated} onChange={(v) => handleChange('mcmssAffiliationStated', v)} options={['Yes', 'No']} />
       </Field>
     </div>
@@ -327,12 +361,15 @@ function PublicationFundingForm({ user, onLogout }) {
           'Other',
         ]}
       />
+      {fieldErrors.publicationType && (
+        <p className="text-xs font-medium text-destructive">{fieldErrors.publicationType}</p>
+      )}
       {formData.publicationType === 'Other' && (
         <div className="space-y-5">
-          <Field label="Please specify" required>
+          <Field label="Please specify" required error={fieldErrors.publicationTypeOther}>
             <Input value={formData.publicationTypeOther} onChange={(e) => handleChange('publicationTypeOther', e.target.value)} />
           </Field>
-          <Field label="Explain why the publication should be considered eligible" required>
+          <Field label="Explain why the publication should be considered eligible" required error={fieldErrors.publicationTypeOtherExplanation}>
             <Textarea rows={4} value={formData.publicationTypeOtherExplanation} onChange={(e) => handleChange('publicationTypeOtherExplanation', e.target.value)} />
           </Field>
         </div>
@@ -343,24 +380,24 @@ function PublicationFundingForm({ user, onLogout }) {
   const renderStep5 = () => (
     <div className="space-y-5">
       <StepHeading title="Section 5: Ethical and Administrative Compliance" />
-      <Field label="Does the study have prior ethical approval?" required>
+      <Field label="Does the study have prior ethical approval?" required error={fieldErrors.priorEthicalApproval}>
         <OptionRadioGroup value={formData.priorEthicalApproval} onChange={(v) => handleChange('priorEthicalApproval', v)} options={['Yes', 'No', 'Not applicable']} />
       </Field>
       {formData.priorEthicalApproval === 'Yes' && (
         <div className="space-y-5">
-          <Field label="IRB / ethics approval number" required>
+          <Field label="IRB / ethics approval number" required error={fieldErrors.irbApprovalNumber}>
             <Input value={formData.irbApprovalNumber} onChange={(e) => handleChange('irbApprovalNumber', e.target.value)} />
           </Field>
-          <Field label="Approving institution / committee" required>
+          <Field label="Approving institution / committee" required error={fieldErrors.approvingInstitution}>
             <Input value={formData.approvingInstitution} onChange={(e) => handleChange('approvingInstitution', e.target.value)} />
           </Field>
-          <Field label="Date of approval" required>
+          <Field label="Date of approval" required error={fieldErrors.ethicsApprovalDate}>
             <Input type="date" value={formData.ethicsApprovalDate} onChange={(e) => handleChange('ethicsApprovalDate', e.target.value)} />
           </Field>
         </div>
       )}
       {formData.priorEthicalApproval === 'No' && (
-        <Field label="If ethical approval was not required, state the reason" required>
+        <Field label="If ethical approval was not required, state the reason" required error={fieldErrors.ethicsNotRequiredReason || fieldErrors.ethicsNotRequiredOther}>
           <OptionRadioGroup
             className="flex-col gap-2"
             value={formData.ethicsNotRequiredReason}
@@ -419,47 +456,44 @@ function PublicationFundingForm({ user, onLogout }) {
                     type="number"
                     min="0"
                     step="0.001"
+                    disabled={formData.fundingItems[key].requested !== 'Yes'}
+                    aria-invalid={!!fieldErrors[`fundingItems.${key}.amount`]}
                     value={formData.fundingItems[key].amount}
                     onChange={(e) => handleFundingItemChange(key, 'amount', e.target.value)}
                   />
+                  {fieldErrors[`fundingItems.${key}.amount`] && (
+                    <p className="mt-1 text-xs font-medium text-destructive">
+                      {fieldErrors[`fundingItems.${key}.amount`]}
+                    </p>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
-      <Field label="Total requested amount (OMR)" required>
-        <Input value={formData.totalRequestedAmount} onChange={(e) => handleChange('totalRequestedAmount', e.target.value)} />
+      <Field label="Total requested amount (OMR)" required error={fieldErrors.totalRequestedAmount}>
+        <Input
+          type="number"
+          min="0"
+          step="0.001"
+          value={formData.totalRequestedAmount}
+          onChange={(e) => handleChange('totalRequestedAmount', e.target.value)}
+        />
       </Field>
-      <Field label="Date of payment" required>
+      <Field label="Date of payment" required error={fieldErrors.dateOfPayment}>
         <Input type="date" value={formData.dateOfPayment} onChange={(e) => handleChange('dateOfPayment', e.target.value)} />
       </Field>
-      <Field label="Proof of payment (attachment)">
-        <FileUpload field="proofOfPaymentFiles" files={formData.proofOfPaymentFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} />
+      <Field label="Proof of payment (attachment)" hint="Up to 3 files">
+        <FileUpload field="proofOfPaymentFiles" files={formData.proofOfPaymentFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} maxFiles={3} />
       </Field>
     </div>
   );
 
+  // Step 7 (swapped): Required Attachments
   const renderStep7 = () => (
     <div className="space-y-5">
-      <StepHeading title="Section 7: Eligibility Checklist" description="Please confirm the following (all required):" />
-      <div className="space-y-3">
-        {ELIGIBILITY_ITEMS.map(({ key, label }) => (
-          <CheckboxField
-            key={key}
-            checked={!!formData.eligibilityChecklist[key]}
-            onChange={() => handleChecklistToggle('eligibilityChecklist', key)}
-          >
-            {label}
-          </CheckboxField>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderStep8 = () => (
-    <div className="space-y-5">
-      <StepHeading title="Section 8: Required Attachments" />
+      <StepHeading title="Section 7: Required Attachments" />
       <div className="space-y-4">
         {ATTACHMENT_ITEMS.map(({ key, label, files }) => (
           <div key={key} className="rounded-lg border border-border p-4">
@@ -471,12 +505,50 @@ function PublicationFundingForm({ user, onLogout }) {
             </CheckboxField>
             {formData.attachmentChecklist[key] && (
               <div className="mt-3">
-                <FileUpload field={files} files={formData[files]} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} />
+                <FileUpload field={files} files={formData[files]} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} error={fieldErrors[files]} />
+                {fieldErrors[files] && (
+                  <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors[files]}</p>
+                )}
               </div>
             )}
           </div>
         ))}
+        {fieldErrors.irbApprovalFiles && (
+          <p className="text-xs font-medium text-destructive">{fieldErrors.irbApprovalFiles}</p>
+        )}
       </div>
+    </div>
+  );
+
+  // Step 8 (swapped): Eligibility Checklist
+  const renderStep8 = () => (
+    <div className="space-y-5">
+      <StepHeading title="Section 8: Eligibility Checklist" description="Please confirm the following (all required):" />
+      <div className="space-y-3">
+        {ELIGIBILITY_ITEMS.map(({ key, label }) => {
+          const hasError = !!fieldErrors[`eligibilityChecklist.${key}`];
+          return (
+            <CheckboxField
+              key={key}
+              className={cn(hasError && 'text-destructive')}
+              checked={!!formData.eligibilityChecklist[key]}
+              onChange={() => handleChecklistToggle('eligibilityChecklist', key)}
+            >
+              {label}
+            </CheckboxField>
+          );
+        })}
+      </div>
+      {(fieldErrors.frontPageOrArticleFiles || fieldErrors.proofOfPaymentFiles) && (
+        <div className="space-y-1">
+          {fieldErrors.frontPageOrArticleFiles && (
+            <p className="text-xs font-medium text-destructive">{fieldErrors.frontPageOrArticleFiles}</p>
+          )}
+          {fieldErrors.proofOfPaymentFiles && (
+            <p className="text-xs font-medium text-destructive">{fieldErrors.proofOfPaymentFiles}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -489,17 +561,10 @@ function PublicationFundingForm({ user, onLogout }) {
         supporting documents submitted are valid. The applicant understands that funding is considered only after
         manuscript acceptance, reimbursement is subject to approval, and additional post-publication requirements may apply.
       </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        {[
-          ['applicantDeclarationName', 'Applicant name'],
-          ['applicantSignature', 'Signature'],
-        ].map(([key, label]) => (
-          <Field key={key} label={label} required>
-            <Input value={formData[key]} onChange={(e) => handleChange(key, e.target.value)} />
-          </Field>
-        ))}
-      </div>
-      <Field label="Date" required>
+      <Field label="Applicant name" required error={fieldErrors.applicantDeclarationName}>
+        <Input value={formData.applicantDeclarationName} onChange={(e) => handleChange('applicantDeclarationName', e.target.value)} />
+      </Field>
+      <Field label="Date" required error={fieldErrors.applicantDeclarationDate}>
         <Input type="date" value={formData.applicantDeclarationDate} onChange={(e) => handleChange('applicantDeclarationDate', e.target.value)} />
       </Field>
     </div>
@@ -569,13 +634,7 @@ function PublicationFundingForm({ user, onLogout }) {
                   <Button
                     variant="plum"
                     disabled={loading}
-                    onClick={() => {
-                      if (!validateEntireForm(formData, PF_STEPS.length)) {
-                        toast.error('Please complete all required fields in every section.');
-                        return;
-                      }
-                      setShowConfirmModal(true);
-                    }}
+                    onClick={handleSubmitClick}
                   >
                     {loading && <Loader2 className="animate-spin" />}
                     {loading ? 'Submitting...' : 'Submit for Review'}

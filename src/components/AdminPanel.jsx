@@ -6,6 +6,7 @@ import {
   Users,
   Settings,
   BarChart3,
+  Bell,
   PanelLeftClose,
   PanelLeft,
   Plus,
@@ -25,6 +26,9 @@ import {
   assignPublicationFundingReviewer,
   submitPublicationFundingReview,
   exportPublicationFunding,
+  getAdminUsers,
+  getNotificationSettings,
+  updateNotificationSettings,
 } from '../utils/api';
 import UserMenu from './UserMenu';
 import ThemeToggle from './ThemeToggle';
@@ -65,8 +69,11 @@ const NAV_ITEMS = [
   { id: 'applications', label: 'All Applications', Icon: ClipboardList },
   { id: 'users', label: 'Users', Icon: Users },
   { id: 'administration', label: 'Administration', Icon: Settings },
+  { id: 'settings', label: 'Settings', Icon: Bell },
   { id: 'reports', label: 'Reports & Analytics', Icon: BarChart3 },
 ];
+
+const NO_RECIPIENT = 'none';
 
 function StatCard({ value, label }) {
   return (
@@ -117,6 +124,9 @@ function AdminPanel({ user, onLogout }) {
   const [reviewerToDeactivate, setReviewerToDeactivate] = useState(null);
   const [deactivating, setDeactivating] = useState(false);
   const [selectedAssignReviewerId, setSelectedAssignReviewerId] = useState('');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [notificationRecipientId, setNotificationRecipientId] = useState(NO_RECIPIENT);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -124,18 +134,37 @@ function AdminPanel({ user, onLogout }) {
 
   const loadData = async () => {
     try {
-      const [subsData, pubData, revsData] = await Promise.all([
+      const [subsData, pubData, revsData, adminsData, settingsData] = await Promise.all([
         getSubmissions(),
         getPublicationFundingApplications(),
         getReviewers(),
+        getAdminUsers().catch(() => []),
+        getNotificationSettings().catch(() => null),
       ]);
       setSubmissions(subsData);
       setPublicationApps(pubData);
       setReviewers(revsData);
+      setAdminUsers(adminsData || []);
+      const recipient = settingsData?.submissionNotificationRecipient;
+      setNotificationRecipientId(recipient?._id || recipient?.id || NO_RECIPIENT);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveNotificationSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await updateNotificationSettings(
+        notificationRecipientId === NO_RECIPIENT ? null : notificationRecipientId
+      );
+      toast.success('Notification settings saved.');
+    } catch {
+      toast.error('Failed to save notification settings.');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -587,6 +616,67 @@ function AdminPanel({ user, onLogout }) {
     </div>
   );
 
+  const renderSettingsView = () => {
+    const selectedAdmin = adminUsers.find(
+      (a) => (a._id || a.id) === notificationRecipientId
+    );
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure platform-wide administrative settings.
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-semibold text-plum">Submission Notifications</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Choose which admin account receives an email when a new form (research ethics or
+                publication funding) is submitted.
+              </p>
+            </div>
+            <div className="max-w-md space-y-2">
+              <Label>Notification recipient</Label>
+              <Select value={notificationRecipientId} onValueChange={setNotificationRecipientId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select an admin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_RECIPIENT}>No notifications</SelectItem>
+                  {adminUsers.map((admin) => {
+                    const aid = admin._id || admin.id;
+                    const name = `${admin.firstName || ''} ${admin.lastName || ''}`.trim() || admin.email;
+                    return (
+                      <SelectItem key={aid} value={String(aid)}>
+                        {name} — {admin.email}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {adminUsers.length === 0 && (
+                <p className="text-xs text-muted-foreground">No admin accounts found.</p>
+              )}
+              {selectedAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  Notifications will be sent to {selectedAdmin.email}.
+                </p>
+              )}
+            </div>
+            <div>
+              <Button onClick={handleSaveNotificationSettings} disabled={savingSettings}>
+                {savingSettings ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   const reviewerFields = (
     <div className="space-y-4">
       {reviewerFormError && (
@@ -694,6 +784,7 @@ function AdminPanel({ user, onLogout }) {
             />
           )}
           {activeSection === 'administration' && renderAdministrationView()}
+          {activeSection === 'settings' && renderSettingsView()}
           {activeSection === 'reports' && (
             <ComingSoon
               title="Reports & Analytics"

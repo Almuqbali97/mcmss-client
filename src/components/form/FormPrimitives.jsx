@@ -1,20 +1,110 @@
-import { UploadCloud, X, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { UploadCloud, X, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { COUNTRIES } from '@/lib/countries';
+
+/* Searchable country dropdown (no external deps) */
+export function CountrySelect({ value, onChange, placeholder = 'Select country', disabled, error, id }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const filtered = query
+    ? COUNTRIES.filter((c) => c.toLowerCase().includes(query.toLowerCase()))
+    : COUNTRIES;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        id={id}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus:outline-none focus:ring-2 focus:ring-ring',
+          error && 'border-destructive',
+          disabled && 'cursor-not-allowed opacity-50'
+        )}
+      >
+        <span className={cn('truncate', !value && 'text-muted-foreground')}>{value || placeholder}</span>
+        <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+      </button>
+      {open && !disabled && (
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+          <div className="flex items-center gap-2 border-b border-border px-3">
+            <Search className="size-4 shrink-0 opacity-50" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search country..."
+              className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+          <ul className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 && (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No country found.</li>
+            )}
+            {filtered.map((c) => (
+              <li key={c}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(c);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                >
+                  <span className="truncate">{c}</span>
+                  {value === c && <Check className="size-4 shrink-0" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* Labelled field wrapper */
-export function Field({ label, required, htmlFor, hint, className, children }) {
+export function Field({ label, required, htmlFor, hint, error, className, children }) {
   return (
     <div className={cn('space-y-2', className)}>
       {label && (
-        <Label htmlFor={htmlFor}>
+        <Label htmlFor={htmlFor} className={cn(error && 'text-destructive')}>
           {label}
           {required && <span className="text-destructive">*</span>}
         </Label>
       )}
-      {children}
+      <div
+        className={cn(
+          error &&
+            '[&_[data-slot=input]]:border-destructive [&_[data-slot=textarea]]:border-destructive [&_[data-slot=select-trigger]]:border-destructive'
+        )}
+      >
+        {children}
+      </div>
+      {error && (
+        <p className="text-xs font-medium text-destructive">
+          {typeof error === 'string' ? error : 'This field is required.'}
+        </p>
+      )}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -60,21 +150,30 @@ export function FileUpload({
   onRemove,
   getFileName,
   accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png',
+  maxFiles = 5,
+  error,
 }) {
   const inputId = `file-${field}`;
   return (
     <div className="space-y-2">
       <label
         htmlFor={inputId}
-        className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 px-4 py-6 text-center transition-colors hover:border-primary/50 hover:bg-accent"
+        className={cn(
+          'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 px-4 py-6 text-center transition-colors hover:border-primary/50 hover:bg-accent',
+          error && 'border-destructive'
+        )}
       >
         <UploadCloud className="size-6 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">Click to upload files</span>
-        <span className="text-xs text-muted-foreground">PDF, DOC, DOCX, JPG, PNG (max 5 files)</span>
+        <span className="text-sm font-medium text-foreground">
+          {maxFiles === 1 ? 'Click to upload file' : 'Click to upload files'}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          PDF, DOC, DOCX, JPG, PNG (max {maxFiles} file{maxFiles === 1 ? '' : 's'})
+        </span>
         <input
           id={inputId}
           type="file"
-          multiple
+          multiple={maxFiles > 1}
           accept={accept}
           className="hidden"
           onChange={(e) => onAdd(field, e.target.files)}

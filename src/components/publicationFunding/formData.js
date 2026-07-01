@@ -5,8 +5,8 @@ export const PF_STEPS = [
   { id: 4, title: 'Publication Type', section: 'section4' },
   { id: 5, title: 'Ethical Compliance', section: 'section5' },
   { id: 6, title: 'Funding Request', section: 'section6' },
-  { id: 7, title: 'Eligibility', section: 'section7' },
-  { id: 8, title: 'Attachments', section: 'section8' },
+  { id: 7, title: 'Attachments', section: 'section7' },
+  { id: 8, title: 'Eligibility', section: 'section8' },
   { id: 9, title: 'Declaration', section: 'section9' },
 ];
 
@@ -81,7 +81,6 @@ export const createInitialFormData = (user) => ({
   attachmentChecklist: {
     acceptanceLetter: false,
     publishedArticle: false,
-    proofOfPayment: false,
     irbLetter: false,
     copeDoajProof: false,
     additional: false,
@@ -94,7 +93,6 @@ export const createInitialFormData = (user) => ({
   additionalSupportingFiles: [],
 
   applicantDeclarationName: '',
-  applicantSignature: '',
   applicantDeclarationDate: '',
 });
 
@@ -114,7 +112,6 @@ export const ELIGIBILITY_ITEMS = [
 export const ATTACHMENT_ITEMS = [
   { key: 'acceptanceLetter', label: 'Acceptance letter from the journal', files: 'acceptanceLetterFiles' },
   { key: 'publishedArticle', label: 'Final published article or front page of the article', files: 'publishedArticleFiles' },
-  { key: 'proofOfPayment', label: 'Proof of payment / invoice / receipt', files: 'invoiceReceiptFiles' },
   { key: 'irbLetter', label: 'IRB / ethics approval letter, if applicable', files: 'irbApprovalFiles' },
   { key: 'copeDoajProof', label: 'Proof of COPE / DOAJ compliance, if open-access fees are requested', files: 'copeDoajProofFiles' },
   { key: 'additional', label: 'Any additional supporting documents', files: 'additionalSupportingFiles' },

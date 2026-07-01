@@ -223,7 +223,15 @@ function ViewPublicationFunding({ user, onLogout }) {
         <FileList label="Proof of payment files" files={fd.proofOfPaymentFiles} />
       </SectionCard>
 
-      <SectionCard title="Section 7: Eligibility Checklist">
+      <SectionCard title="Section 7: Required Attachments">
+        {ATTACHMENT_ITEMS.map(({ key, label, files }) =>
+          fd.attachmentChecklist?.[key] ? (
+            <FileList key={key} label={label} files={fd[files]} />
+          ) : null
+        )}
+      </SectionCard>
+
+      <SectionCard title="Section 8: Eligibility Checklist">
         <ul className="space-y-2">
           {ELIGIBILITY_ITEMS.map(({ key, label }) => {
             const checked = fd.eligibilityChecklist?.[key];
@@ -241,17 +249,8 @@ function ViewPublicationFunding({ user, onLogout }) {
         </ul>
       </SectionCard>
 
-      <SectionCard title="Section 8: Required Attachments">
-        {ATTACHMENT_ITEMS.map(({ key, label, files }) =>
-          fd.attachmentChecklist?.[key] ? (
-            <FileList key={key} label={label} files={fd[files]} />
-          ) : null
-        )}
-      </SectionCard>
-
       <SectionCard title="Section 9: Applicant Declaration">
         <InfoRow label="Applicant name" value={fd.applicantDeclarationName} />
-        <InfoRow label="Signature" value={fd.applicantSignature} />
         <InfoRow label="Date" value={fd.applicantDeclarationDate} />
       </SectionCard>
 

@@ -369,3 +369,18 @@ export const exportPublicationFunding = async (id) => {
   const response = await api.get(`/publication-funding/${id}/export`, { responseType: 'json' });
   return getData(response);
 };
+
+export const getAdminUsers = async () => {
+  const response = await api.get('/settings/admins');
+  return getData(response);
+};
+
+export const getNotificationSettings = async () => {
+  const response = await api.get('/settings/notifications');
+  return getData(response);
+};
+
+export const updateNotificationSettings = async (submissionNotificationRecipient) => {
+  const response = await api.put('/settings/notifications', { submissionNotificationRecipient });
+  return getData(response);
+};

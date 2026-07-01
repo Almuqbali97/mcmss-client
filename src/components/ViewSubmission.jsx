@@ -212,13 +212,34 @@ function ViewSubmission({ user, onLogout }) {
               <h4 className="font-semibold text-foreground">Award details</h4>
               <InfoRow label="Research student (Masters/PhD)" value={formData.researchStudent} />
               <InfoRow label="Supervisor's name" value={formData.supervisorName} />
-              <InfoRow label="Supervisor's signature" value={formData.supervisorSignature} />
+              <InfoRow label="Supervisor's email" value={formData.supervisorEmail || formData.supervisorSignature} />
+              {submission.supervisorApproval?.status && (
+                <InfoRow
+                  label="Supervisor decision"
+                  value={
+                    submission.supervisorApproval.status === 'pending'
+                      ? 'Pending'
+                      : submission.supervisorApproval.status.charAt(0).toUpperCase() +
+                        submission.supervisorApproval.status.slice(1)
+                  }
+                />
+              )}
             </div>
           )}
         </SectionCard>
 
         <SectionCard title="Section 3: Project Description">
-          <InfoRow label="Research Type" value={formData.researchType?.join(', ')} />
+          <InfoRow
+            label="Research Type"
+            value={[
+              ...(formData.researchType || []).filter((t) => t !== 'Other'),
+              formData.researchType?.includes('Other') && formData.researchTypeOther
+                ? formData.researchTypeOther
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+          />
           <InfoRow label="Study Involvement" value={formData.studyInvolves?.join('; ')} />
           <FileList label="Information Sheet Files" files={formData.informationSheetFiles} />
           <FileList label="Consent Form Files" files={formData.consentFormFiles} />

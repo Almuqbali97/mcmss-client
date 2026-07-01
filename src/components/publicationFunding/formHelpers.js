@@ -1,4 +1,4 @@
-import { PF_FILE_FIELDS, ATTACHMENT_ITEMS } from './formData.js';
+import { PF_FILE_FIELDS, ATTACHMENT_ITEMS, ELIGIBILITY_ITEMS, FUNDING_ITEMS } from './formData.js';
 
 export function sanitizeFormData(data) {
   if (!data) return data;
@@ -51,91 +51,151 @@ export function buildPublicationFundingFormData(data) {
   return fd;
 }
 
-export function validateStep(step, formData) {
+const ELIGIBILITY_LABELS = Object.fromEntries(ELIGIBILITY_ITEMS.map((i) => [i.key, i.label]));
+const ATTACHMENT_LABELS = Object.fromEntries(ATTACHMENT_ITEMS.map((i) => [i.files, i.label]));
+
+/**
+ * Returns an object mapping field keys to error messages for the given step.
+ * Empty object means the step is valid.
+ */
+export function getStepErrors(step, formData) {
+  const e = {};
+  const req = (key, ok, msg = 'This field is required.') => {
+    if (!ok) e[key] = msg;
+  };
+
   switch (step) {
     case 1:
-      return (
-        formData.fullName?.trim() &&
-        formData.department?.trim() &&
-        formData.position?.trim() &&
-        formData.email?.trim() &&
-        formData.phone?.trim()
-      );
+      req('fullName', formData.fullName?.trim());
+      req('department', formData.department?.trim());
+      req('position', formData.position?.trim());
+      req('email', formData.email?.trim());
+      req('phone', formData.phone?.trim());
+      break;
     case 2:
-      if (
-        !formData.manuscriptTitle?.trim() ||
-        !formData.journalName?.trim() ||
-        !formData.dateOfAcceptance ||
-        !formData.scopusIndexed ||
-        !formData.journalQuartile ||
-        !formData.quartileSource
-      ) {
-        return false;
+      req('manuscriptTitle', formData.manuscriptTitle?.trim());
+      req('journalName', formData.journalName?.trim());
+      req('dateOfAcceptance', formData.dateOfAcceptance);
+      req('scopusIndexed', formData.scopusIndexed);
+      req('journalQuartile', formData.journalQuartile);
+      req('quartileSource', formData.quartileSource);
+      if (formData.quartileSource === 'Other') {
+        req('quartileSourceOther', formData.quartileSourceOther?.trim());
       }
-      if (formData.quartileSource === 'Other' && !formData.quartileSourceOther?.trim()) {
-        return false;
-      }
-      return true;
+      break;
     case 3:
-      return formData.applicantRole?.length > 0 && formData.mcmssAffiliationStated;
+      req('applicantRole', formData.applicantRole?.length > 0, 'Select at least one role.');
+      req('mcmssAffiliationStated', formData.mcmssAffiliationStated);
+      break;
     case 4:
-      if (!formData.publicationType) return false;
+      req('publicationType', formData.publicationType);
       if (formData.publicationType === 'Other') {
-        return formData.publicationTypeOther?.trim() && formData.publicationTypeOtherExplanation?.trim();
+        req('publicationTypeOther', formData.publicationTypeOther?.trim());
+        req('publicationTypeOtherExplanation', formData.publicationTypeOtherExplanation?.trim());
       }
-      return true;
+      break;
     case 5:
-      if (!formData.priorEthicalApproval) return false;
+      req('priorEthicalApproval', formData.priorEthicalApproval);
       if (formData.priorEthicalApproval === 'Yes') {
-        return (
-          formData.irbApprovalNumber?.trim() &&
-          formData.approvingInstitution?.trim() &&
-          formData.ethicsApprovalDate
-        );
+        req('irbApprovalNumber', formData.irbApprovalNumber?.trim());
+        req('approvingInstitution', formData.approvingInstitution?.trim());
+        req('ethicsApprovalDate', formData.ethicsApprovalDate);
       }
       if (formData.priorEthicalApproval === 'No') {
-        if (!formData.ethicsNotRequiredReason) return false;
+        req('ethicsNotRequiredReason', formData.ethicsNotRequiredReason);
         if (formData.ethicsNotRequiredReason === 'Other') {
-          return formData.ethicsNotRequiredOther?.trim();
+          req('ethicsNotRequiredOther', formData.ethicsNotRequiredOther?.trim());
         }
       }
-      return true;
+      break;
     case 6:
-      return formData.totalRequestedAmount?.trim() && formData.dateOfPayment;
-    case 7: {
-      const checklistValid = Object.values(formData.eligibilityChecklist || {}).every(Boolean);
-      if (!checklistValid) return false;
-      if (formData.eligibilityChecklist?.frontPageAttached) {
-        const frontPageFiles = formData.frontPageOrArticleFiles || [];
-        if (frontPageFiles.length === 0) return false;
+      for (const { key, label } of FUNDING_ITEMS) {
+        const item = formData.fundingItems?.[key] || {};
+        if (item.requested === 'Yes') {
+          const amt = String(item.amount ?? '').trim();
+          req(`fundingItems.${key}.amount`, amt !== '', `Enter an amount for "${label}".`);
+        }
+      }
+      req('totalRequestedAmount', String(formData.totalRequestedAmount ?? '').trim());
+      req('dateOfPayment', formData.dateOfPayment);
+      break;
+    case 7: // Attachments
+      for (const { key, files, label } of ATTACHMENT_ITEMS) {
+        if (formData.attachmentChecklist?.[key]) {
+          req(files, (formData[files] || []).length > 0, `Upload a file for "${label}".`);
+        }
+      }
+      if (formData.priorEthicalApproval === 'Yes') {
+        req('irbApprovalFiles', (formData.irbApprovalFiles || []).length > 0, 'Upload the IRB / ethics approval letter.');
+      }
+      break;
+    case 8: // Eligibility
+      for (const { key, label } of ELIGIBILITY_ITEMS) {
+        req(`eligibilityChecklist.${key}`, !!formData.eligibilityChecklist?.[key], `Please confirm: ${label}`);
+      }
+      if (formData.eligibilityChecklist?.frontPageAttached && (formData.frontPageOrArticleFiles || []).length === 0) {
+        req('frontPageOrArticleFiles', false, 'Attach the published article front page (Section 2).');
       }
       if (formData.eligibilityChecklist?.proofOfPaymentAttached) {
         const paymentFiles = [...(formData.proofOfPaymentFiles || []), ...(formData.invoiceReceiptFiles || [])];
-        if (paymentFiles.length === 0) return false;
+        req('proofOfPaymentFiles', paymentFiles.length > 0, 'Attach proof of payment (Section 6).');
       }
-      return true;
-    }
-    case 8: {
-      for (const { key, files } of ATTACHMENT_ITEMS) {
-        if (formData.attachmentChecklist?.[key] && (!formData[files] || formData[files].length === 0)) {
-          return false;
-        }
-      }
-      if (formData.priorEthicalApproval === 'Yes') {
-        const irbFiles = formData.irbApprovalFiles || [];
-        if (irbFiles.length === 0) return false;
-      }
-      return true;
-    }
+      break;
     case 9:
-      return (
-        formData.applicantDeclarationName?.trim() &&
-        formData.applicantSignature?.trim() &&
-        formData.applicantDeclarationDate
-      );
+      req('applicantDeclarationName', formData.applicantDeclarationName?.trim());
+      req('applicantDeclarationDate', formData.applicantDeclarationDate);
+      break;
     default:
-      return true;
+      break;
   }
+  return e;
+}
+
+/* Human-readable labels for the "what is missing" summary. */
+export const PF_FIELD_LABELS = {
+  fullName: 'Full name',
+  department: 'Department / Unit',
+  position: 'Position / Title',
+  email: 'Email address',
+  phone: 'Phone number',
+  manuscriptTitle: 'Manuscript title',
+  journalName: 'Journal name',
+  dateOfAcceptance: 'Date of acceptance',
+  scopusIndexed: 'Scopus indexed',
+  journalQuartile: 'Journal quartile',
+  quartileSource: 'Source of quartile data',
+  quartileSourceOther: 'Quartile source (specify)',
+  applicantRole: 'Applicant role',
+  mcmssAffiliationStated: 'Institutional affiliation stated',
+  publicationType: 'Type of publication',
+  publicationTypeOther: 'Publication type (specify)',
+  publicationTypeOtherExplanation: 'Eligibility explanation',
+  priorEthicalApproval: 'Prior ethical approval',
+  irbApprovalNumber: 'IRB / ethics approval number',
+  approvingInstitution: 'Approving institution',
+  ethicsApprovalDate: 'Date of approval',
+  ethicsNotRequiredReason: 'Reason ethics not required',
+  ethicsNotRequiredOther: 'Reason (specify)',
+  totalRequestedAmount: 'Total requested amount',
+  dateOfPayment: 'Date of payment',
+  frontPageOrArticleFiles: 'Front page / article attachment',
+  proofOfPaymentFiles: 'Proof of payment',
+  irbApprovalFiles: 'IRB approval letter',
+  applicantDeclarationName: 'Applicant name (declaration)',
+  applicantDeclarationDate: 'Declaration date',
+};
+
+export function describeErrorKey(key) {
+  if (PF_FIELD_LABELS[key]) return PF_FIELD_LABELS[key];
+  if (key.startsWith('fundingItems.')) return 'Funding item amount';
+  if (key.startsWith('eligibilityChecklist.')) return 'Eligibility confirmation';
+  if (ATTACHMENT_LABELS[key]) return ATTACHMENT_LABELS[key];
+  if (ELIGIBILITY_LABELS[key]) return ELIGIBILITY_LABELS[key];
+  return key;
+}
+
+export function validateStep(step, formData) {
+  return Object.keys(getStepErrors(step, formData)).length === 0;
 }
 
 export function validateEntireForm(formData, stepsCount) {
@@ -143,4 +203,11 @@ export function validateEntireForm(formData, stepsCount) {
     if (!validateStep(step, formData)) return false;
   }
   return true;
+}
+
+export function getFirstInvalidStep(formData, stepsCount) {
+  for (let step = 1; step <= stepsCount; step++) {
+    if (!validateStep(step, formData)) return step;
+  }
+  return null;
 }
