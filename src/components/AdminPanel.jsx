@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ClipboardList,
@@ -18,6 +18,7 @@ import {
   assignReviewer,
   submitReview,
   getReviewers,
+  getReviewerCandidates,
   createReviewer,
   updateReviewer,
   deleteReviewer,
@@ -32,7 +33,7 @@ import {
 } from '../utils/api';
 import UserMenu from './UserMenu';
 import ThemeToggle from './ThemeToggle';
-import { StatusBadge } from './StatusBadge';
+import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,7 +64,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { cn } from '@/lib/utils';
+import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { id: 'applications', label: 'All Applications', Icon: ClipboardList },
@@ -74,6 +75,13 @@ const NAV_ITEMS = [
 ];
 
 const NO_RECIPIENT = 'none';
+
+// Publication funding keeps its original three-way decision set.
+const PUBLICATION_DECISIONS = [
+  { value: 'approved', label: 'Approve' },
+  { value: 'revisions_required', label: 'Revisions Required' },
+  { value: 'rejected', label: 'Reject' },
+];
 
 function StatCard({ value, label }) {
   return (
@@ -98,8 +106,12 @@ function ComingSoon({ title, description, detail }) {
   );
 }
 
+const VALID_SECTIONS = ['applications', 'users', 'administration', 'settings', 'reports'];
+
 function AdminPanel({ user, onLogout }) {
   const navigate = useNavigate();
+  const { section } = useParams();
+  const activeSection = VALID_SECTIONS.includes(section) ? section : 'applications';
   const [submissions, setSubmissions] = useState([]);
   const [publicationApps, setPublicationApps] = useState([]);
   const [applicationTab, setApplicationTab] = useState('ethics');
@@ -109,9 +121,8 @@ function AdminPanel({ user, onLogout }) {
   const [selectedApplicationType, setSelectedApplicationType] = useState('ethics');
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewData, setReviewData] = useState({ status: 'approved', comments: '' });
+  const [reviewData, setReviewData] = useState({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
   const [filterStatus, setFilterStatus] = useState('all');
-  const [activeSection, setActiveSection] = useState('applications');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all');
@@ -119,11 +130,14 @@ function AdminPanel({ user, onLogout }) {
   const [showAddReviewerModal, setShowAddReviewerModal] = useState(false);
   const [showEditReviewerModal, setShowEditReviewerModal] = useState(false);
   const [selectedReviewer, setSelectedReviewer] = useState(null);
-  const [reviewerForm, setReviewerForm] = useState({ name: '', email: '', specialization: '' });
+  const [reviewerForm, setReviewerForm] = useState({ userId: '', specialization: '' });
   const [reviewerFormError, setReviewerFormError] = useState('');
   const [reviewerToDeactivate, setReviewerToDeactivate] = useState(null);
   const [deactivating, setDeactivating] = useState(false);
   const [selectedAssignReviewerId, setSelectedAssignReviewerId] = useState('');
+  const [assignSearch, setAssignSearch] = useState('');
+  const [reviewerCandidates, setReviewerCandidates] = useState([]);
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [adminUsers, setAdminUsers] = useState([]);
   const [notificationRecipientId, setNotificationRecipientId] = useState(NO_RECIPIENT);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -134,16 +148,18 @@ function AdminPanel({ user, onLogout }) {
 
   const loadData = async () => {
     try {
-      const [subsData, pubData, revsData, adminsData, settingsData] = await Promise.all([
+      const [subsData, pubData, revsData, candData, adminsData, settingsData] = await Promise.all([
         getSubmissions(),
         getPublicationFundingApplications(),
         getReviewers(),
+        getReviewerCandidates().catch(() => []),
         getAdminUsers().catch(() => []),
         getNotificationSettings().catch(() => null),
       ]);
       setSubmissions(subsData);
       setPublicationApps(pubData);
       setReviewers(revsData);
+      setReviewerCandidates(candData || []);
       setAdminUsers(adminsData || []);
       const recipient = settingsData?.submissionNotificationRecipient;
       setNotificationRecipientId(recipient?._id || recipient?.id || NO_RECIPIENT);
@@ -195,12 +211,12 @@ function AdminPanel({ user, onLogout }) {
       if (selectedApplicationType === 'publication') {
         await submitPublicationFundingReview(id, reviewData.status, reviewData.comments);
       } else {
-        await submitReview(id, reviewData.status, reviewData.comments);
+        await submitReview(id, reviewData.status, reviewData.comments, reviewData.deadlineOption);
       }
       await loadData();
       setShowReviewModal(false);
       setSelectedSubmission(null);
-      setReviewData({ status: 'approved', comments: '' });
+      setReviewData({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
       toast.success('Review submitted successfully!');
     } catch {
       toast.error('Failed to submit review. Please try again.');
@@ -227,7 +243,8 @@ function AdminPanel({ user, onLogout }) {
   };
 
   const openAddReviewerModal = () => {
-    setReviewerForm({ name: '', email: '', specialization: '' });
+    setReviewerForm({ userId: '', specialization: '' });
+    setCandidateSearch('');
     setReviewerFormError('');
     setShowAddReviewerModal(true);
   };
@@ -235,8 +252,7 @@ function AdminPanel({ user, onLogout }) {
   const openEditReviewerModal = (reviewer) => {
     setSelectedReviewer(reviewer);
     setReviewerForm({
-      name: reviewer.name || '',
-      email: reviewer.email || '',
+      userId: reviewer.userId?._id || reviewer.userId || '',
       specialization: reviewer.specialization || '',
     });
     setReviewerFormError('');
@@ -245,17 +261,13 @@ function AdminPanel({ user, onLogout }) {
 
   const handleAddReviewer = async (e) => {
     e.preventDefault();
-    if (!reviewerForm.name.trim()) {
-      setReviewerFormError('Name is required.');
-      return;
-    }
-    if (!reviewerForm.email.trim()) {
-      setReviewerFormError('Email is required.');
+    if (!reviewerForm.userId) {
+      setReviewerFormError('Select a user to make a reviewer.');
       return;
     }
     setReviewerFormError('');
     try {
-      await createReviewer(reviewerForm);
+      await createReviewer({ userId: reviewerForm.userId, specialization: reviewerForm.specialization });
       await loadData();
       setShowAddReviewerModal(false);
       toast.success('Reviewer added.');
@@ -267,17 +279,11 @@ function AdminPanel({ user, onLogout }) {
   const handleEditReviewer = async (e) => {
     e.preventDefault();
     if (!selectedReviewer) return;
-    if (!reviewerForm.name.trim()) {
-      setReviewerFormError('Name is required.');
-      return;
-    }
-    if (!reviewerForm.email.trim()) {
-      setReviewerFormError('Email is required.');
-      return;
-    }
     setReviewerFormError('');
     try {
-      await updateReviewer(selectedReviewer._id || selectedReviewer.id, reviewerForm);
+      await updateReviewer(selectedReviewer._id || selectedReviewer.id, {
+        specialization: reviewerForm.specialization,
+      });
       await loadData();
       setShowEditReviewerModal(false);
       setSelectedReviewer(null);
@@ -326,7 +332,9 @@ function AdminPanel({ user, onLogout }) {
     draft: items.filter((s) => s.status === 'draft').length,
     under_review: items.filter((s) => s.status === 'under_review').length,
     approved: items.filter((s) => s.status === 'approved').length,
-    revisions_required: items.filter((s) => s.status === 'revisions_required').length,
+    revisions_required: items.filter((s) =>
+      ['revisions_required', 'conditional_minor', 'major_revisions'].includes(s.status)
+    ).length,
     rejected: items.filter((s) => s.status === 'rejected').length,
   });
 
@@ -390,12 +398,14 @@ function AdminPanel({ user, onLogout }) {
     setSelectedApplicationType(type);
     setSelectedSubmission(item);
     setSelectedAssignReviewerId('');
+    setAssignSearch('');
     setShowAssignModal(true);
   };
 
   const openReviewModal = (item, type) => {
     setSelectedApplicationType(type);
     setSelectedSubmission(item);
+    setReviewData({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
     setShowReviewModal(true);
   };
 
@@ -416,10 +426,39 @@ function AdminPanel({ user, onLogout }) {
           <TableCell>{person}</TableCell>
           <TableCell>
             <StatusBadge status={item.status} />
+            {!isPublicationTab && item.revision?.deadline && (
+              <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
+                {formatRemaining(item.revision.deadline)}
+              </div>
+            )}
           </TableCell>
           <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
           <TableCell>
-            {item.assignedReviewer || <span className="text-muted-foreground">Not assigned</span>}
+            {item.assignedReviewer ? (
+              <div className="flex flex-col">
+                <span>{item.assignedReviewer}</span>
+                {!isPublicationTab && item.reviewerAcceptance?.status && (
+                  <span
+                    className={cn(
+                      'text-xs',
+                      item.reviewerAcceptance.status === 'accepted'
+                        ? 'text-success'
+                        : item.reviewerAcceptance.status === 'rejected'
+                          ? 'text-destructive'
+                          : 'text-muted-foreground'
+                    )}
+                  >
+                    {item.reviewerAcceptance.status === 'accepted'
+                      ? 'Accepted'
+                      : item.reviewerAcceptance.status === 'rejected'
+                        ? 'Declined'
+                        : 'Awaiting acceptance'}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">Not assigned</span>
+            )}
           </TableCell>
           <TableCell>
             <div className="flex justify-end gap-2">
@@ -485,6 +524,8 @@ function AdminPanel({ user, onLogout }) {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  {!isPublicationTab && <SelectItem value="conditional_minor">Conditional — Minor Revisions</SelectItem>}
+                  {!isPublicationTab && <SelectItem value="major_revisions">Major Revisions</SelectItem>}
                   <SelectItem value="revisions_required">Revisions Required</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
@@ -677,7 +718,19 @@ function AdminPanel({ user, onLogout }) {
     );
   };
 
-  const reviewerFields = (
+  const specializationField = (
+    <div className="space-y-2">
+      <Label htmlFor="reviewer-spec">Specialization</Label>
+      <Input
+        id="reviewer-spec"
+        value={reviewerForm.specialization}
+        onChange={(e) => setReviewerForm({ ...reviewerForm, specialization: e.target.value })}
+        placeholder="e.g. Clinical Research, Ethics"
+      />
+    </div>
+  );
+
+  const addReviewerFields = (
     <div className="space-y-4">
       {reviewerFormError && (
         <Alert variant="destructive">
@@ -685,35 +738,70 @@ function AdminPanel({ user, onLogout }) {
         </Alert>
       )}
       <div className="space-y-2">
-        <Label htmlFor="reviewer-name">Name *</Label>
-        <Input
-          id="reviewer-name"
-          value={reviewerForm.name}
-          onChange={(e) => setReviewerForm({ ...reviewerForm, name: e.target.value })}
-          placeholder="Reviewer full name"
-          required
-        />
+        <Label>Select user *</Label>
+        <p className="text-xs text-muted-foreground">
+          Reviewers are chosen from existing platform users. The user keeps their researcher access and gains reviewer duties.
+        </p>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search users by name or email..."
+            value={candidateSearch}
+            onChange={(e) => setCandidateSearch(e.target.value)}
+          />
+        </div>
+        <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border p-1">
+          {(() => {
+            const q = candidateSearch.trim().toLowerCase();
+            const filtered = reviewerCandidates.filter((u) => {
+              const name = `${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase();
+              return !q || name.includes(q) || u.email?.toLowerCase().includes(q);
+            });
+            if (filtered.length === 0) {
+              return <p className="p-3 text-center text-sm text-muted-foreground">No matching users.</p>;
+            }
+            return filtered.map((u) => {
+              const uid = String(u._id || u.id);
+              const selected = reviewerForm.userId === uid;
+              const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
+              return (
+                <button
+                  key={uid}
+                  type="button"
+                  onClick={() => setReviewerForm({ ...reviewerForm, userId: uid })}
+                  className={cn(
+                    'flex w-full flex-col items-start rounded-md px-3 py-2 text-left text-sm transition-colors',
+                    selected ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
+                  )}
+                >
+                  <span className="font-medium">{name}</span>
+                  <span className="text-xs text-muted-foreground">{u.email}</span>
+                </button>
+              );
+            });
+          })()}
+        </div>
       </div>
+      {specializationField}
+    </div>
+  );
+
+  const editReviewerFields = (
+    <div className="space-y-4">
+      {reviewerFormError && (
+        <Alert variant="destructive">
+          <AlertDescription>{reviewerFormError}</AlertDescription>
+        </Alert>
+      )}
       <div className="space-y-2">
-        <Label htmlFor="reviewer-email">Email *</Label>
-        <Input
-          id="reviewer-email"
-          type="email"
-          value={reviewerForm.email}
-          onChange={(e) => setReviewerForm({ ...reviewerForm, email: e.target.value })}
-          placeholder="reviewer@example.com"
-          required
-        />
+        <Label>Reviewer</Label>
+        <Input value={selectedReviewer?.name || ''} disabled />
+        <p className="text-xs text-muted-foreground">
+          Name and email are managed by the user account. Only specialization is editable here.
+        </p>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="reviewer-spec">Specialization</Label>
-        <Input
-          id="reviewer-spec"
-          value={reviewerForm.specialization}
-          onChange={(e) => setReviewerForm({ ...reviewerForm, specialization: e.target.value })}
-          placeholder="e.g. Clinical Research, Ethics"
-        />
-      </div>
+      {specializationField}
     </div>
   );
 
@@ -756,7 +844,7 @@ function AdminPanel({ user, onLogout }) {
               return (
               <button
                 key={id}
-                onClick={() => setActiveSection(id)}
+                onClick={() => navigate(`/admin/${id}`)}
                 title={label}
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -808,20 +896,50 @@ function AdminPanel({ user, onLogout }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Select Reviewer</Label>
-            <Select value={selectedAssignReviewerId} onValueChange={setSelectedAssignReviewerId}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select a reviewer..." /></SelectTrigger>
-              <SelectContent>
-                {reviewers.map((reviewer) => {
-                  const rid = reviewer._id || reviewer.id;
+            <Label>Search reviewers</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Name, email, or specialization..."
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+              />
+            </div>
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-1">
+              {(() => {
+                const q = assignSearch.trim().toLowerCase();
+                const filtered = reviewers.filter((r) =>
+                  !q ||
+                  r.name?.toLowerCase().includes(q) ||
+                  r.email?.toLowerCase().includes(q) ||
+                  r.specialization?.toLowerCase().includes(q)
+                );
+                if (filtered.length === 0) {
+                  return <p className="p-3 text-center text-sm text-muted-foreground">No reviewers match.</p>;
+                }
+                return filtered.map((reviewer) => {
+                  const rid = String(reviewer._id || reviewer.id);
+                  const selected = selectedAssignReviewerId === rid;
                   return (
-                    <SelectItem key={rid} value={String(rid)}>
-                      {reviewer.name}{reviewer.specialization ? ` — ${reviewer.specialization}` : ''}
-                    </SelectItem>
+                    <button
+                      key={rid}
+                      type="button"
+                      onClick={() => setSelectedAssignReviewerId(rid)}
+                      className={cn(
+                        'flex w-full flex-col items-start rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        selected ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
+                      )}
+                    >
+                      <span className="font-medium">{reviewer.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {reviewer.email}{reviewer.specialization ? ` · ${reviewer.specialization}` : ''}
+                      </span>
+                    </button>
                   );
-                })}
-              </SelectContent>
-            </Select>
+                });
+              })()}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => { setShowAssignModal(false); setSelectedAssignReviewerId(''); }}>
@@ -855,12 +973,39 @@ function AdminPanel({ user, onLogout }) {
               <Select value={reviewData.status} onValueChange={(v) => setReviewData({ ...reviewData, status: v })}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="approved">Approve</SelectItem>
-                  <SelectItem value="revisions_required">Revisions Required</SelectItem>
-                  <SelectItem value="rejected">Reject</SelectItem>
+                  {(selectedApplicationType === 'publication' ? PUBLICATION_DECISIONS : REVIEW_DECISIONS).map((d) => (
+                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            {selectedApplicationType !== 'publication' &&
+              REVISION_STATUSES.includes(reviewData.status) &&
+              (selectedSubmission?.revision?.round || 0) >= 1 && (
+                <div className="space-y-2">
+                  <Label>Revision Deadline *</Label>
+                  <Select
+                    value={reviewData.deadlineOption}
+                    onValueChange={(v) => setReviewData({ ...reviewData, deadlineOption: v })}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1_week">1 week</SelectItem>
+                      <SelectItem value="2_weeks">2 weeks</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Second revision. The researcher must resubmit within this window or the form is cancelled.
+                  </p>
+                </div>
+              )}
+            {selectedApplicationType !== 'publication' &&
+              REVISION_STATUSES.includes(reviewData.status) &&
+              (selectedSubmission?.revision?.round || 0) === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  First revision: the researcher is given <strong>30 days</strong> to resubmit before the form is cancelled.
+                </p>
+              )}
             <div className="space-y-2">
               <Label>Review Comments *</Label>
               <Textarea
@@ -885,7 +1030,7 @@ function AdminPanel({ user, onLogout }) {
             <DialogHeader>
               <DialogTitle>Add Reviewer</DialogTitle>
             </DialogHeader>
-            <div className="py-4">{reviewerFields}</div>
+            <div className="py-4">{addReviewerFields}</div>
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setShowAddReviewerModal(false)}>Cancel</Button>
               <Button type="submit">Add Reviewer</Button>
@@ -901,7 +1046,7 @@ function AdminPanel({ user, onLogout }) {
             <DialogHeader>
               <DialogTitle>Edit Reviewer</DialogTitle>
             </DialogHeader>
-            <div className="py-4">{reviewerFields}</div>
+            <div className="py-4">{editReviewerFields}</div>
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setShowEditReviewerModal(false)}>Cancel</Button>
               <Button type="submit">Save Changes</Button>

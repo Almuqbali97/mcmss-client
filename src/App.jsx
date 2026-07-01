@@ -108,6 +108,16 @@ function App() {
             path="/admin"
             element={
               user && user.role === 'admin' ? (
+                <Navigate to="/admin/applications" replace />
+              ) : (
+                <Navigate to={user ? homeRoute : '/login'} replace />
+              )
+            }
+          />
+          <Route
+            path="/admin/:section"
+            element={
+              user && user.role === 'admin' ? (
                 <AdminPanel user={user} onLogout={handleLogout} />
               ) : (
                 <Navigate to={user ? homeRoute : '/login'} replace />

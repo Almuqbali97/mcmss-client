@@ -209,7 +209,7 @@ function SubmissionForm({ user, onLogout }) {
       department: '',
       qualifications: '',
       telephone: '',
-      email: user?.email || '',
+      email: '',
       isFromMCMSS: '',
     },
     coInvestigatorsCount: '1',
@@ -613,8 +613,7 @@ function SubmissionForm({ user, onLogout }) {
         break;
       case 6:
         req('principalInvestigator.fullName', pi.fullName?.trim(), 'Set the PI name in Section 2.');
-        req('piSignature', formData.piSignature?.trim());
-        req('declarationDate', formData.declarationDate);
+        req('principalInvestigator.email', pi.email?.trim(), 'Set the PI email in Section 2.');
         break;
       case 7:
         req('introduction', formData.introduction?.trim());
@@ -1307,12 +1306,9 @@ function SubmissionForm({ user, onLogout }) {
       <Field label="Email of Principal Investigator (PI)" required htmlFor="piDeclarationEmail" hint="Taken from the Principal Investigator details in Section 2. Update the email there if needed.">
         <Input id="piDeclarationEmail" type="email" readOnly value={formData.principalInvestigator?.email || ''} className="bg-muted" />
       </Field>
-      <Field label="Signature" required htmlFor="piSignature" error={fieldErrors.piSignature}>
-        <Input id="piSignature" value={formData.piSignature} onChange={(e) => handleChange('piSignature', e.target.value)} placeholder="Enter your signature" />
-      </Field>
-      <Field label="Date" required htmlFor="declarationDate" error={fieldErrors.declarationDate}>
-        <Input id="declarationDate" type="date" value={formData.declarationDate} onChange={(e) => handleChange('declarationDate', e.target.value)} />
-      </Field>
+      <div className="rounded-lg border border-info/30 bg-info-muted/40 p-4 text-sm leading-relaxed text-foreground/80">
+        On submission, the Principal Investigator above receives an email to approve or disapprove this declaration. Review cannot begin until the PI approves.
+      </div>
     </div>
   );
 

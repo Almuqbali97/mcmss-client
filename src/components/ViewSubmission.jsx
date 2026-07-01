@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSubmission, updateFieldComments, submitReview } from '../utils/api';
+import { getSubmission, updateFieldComments, submitReview, setPiDeclaration } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AppHeader from './AppHeader';
-import { StatusBadge } from './StatusBadge';
+import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
+import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
 import { SectionCard, InfoRow, InfoGrid, FileList } from './view/ViewPrimitives';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -29,7 +30,7 @@ const SECTION7_FIELDS = [
   { key: 'references', label: 'References' },
 ];
 
-const EDITABLE_STATUSES = ['draft', 'revisions_required'];
+const EDITABLE_STATUSES = ['draft', ...REVISION_STATUSES];
 
 function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
@@ -39,13 +40,25 @@ function ViewSubmission({ user, onLogout }) {
   const [fieldComments, setFieldComments] = useState({});
   const [savingComments, setSavingComments] = useState(false);
   const [commentsSaved, setCommentsSaved] = useState(false);
-  const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '' });
+  const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [savingPiDecision, setSavingPiDecision] = useState(false);
 
-  const isReviewer = user?.role === 'reviewer';
-  const canComment = (isReviewer || user?.role === 'admin') && submission?.status === 'under_review';
-  const canSubmitReview = (isReviewer || user?.role === 'admin') && submission?.status === 'under_review';
+  const isAdmin = user?.role === 'admin';
+  const piDeclarationApproved = submission?.piDeclarationApproval?.status === 'approved';
+  const reviewerAccepted = submission?.reviewerAcceptance?.status === 'accepted';
+  // The submitter viewing their own submission is never acting as its reviewer, even if
+  // they hold reviewer capability. The backend only serves this to submitter/assigned-reviewer/admin.
+  const submitterId = submission?.submittedBy?._id || submission?.submittedBy?.id;
+  const isSubmitter = !!submitterId && String(submitterId) === String(user?.id);
+  const isAssignedReviewer =
+    !!user?.isReviewer && !isAdmin && !isSubmitter && !!submission?.assignedReviewerId;
+  // Reviewers must have accepted the assignment AND the PI must have approved; admins may override both.
+  const reviewUnlocked =
+    submission?.status === 'under_review' && (isAdmin || (piDeclarationApproved && reviewerAccepted));
+  const canComment = (isAssignedReviewer || isAdmin) && reviewUnlocked;
+  const canSubmitReview = (isAssignedReviewer || isAdmin) && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && EDITABLE_STATUSES.includes(submission?.status);
 
   useEffect(() => {
@@ -104,13 +117,25 @@ function ViewSubmission({ user, onLogout }) {
     }
     setSubmittingReview(true);
     try {
-      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments);
+      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments, reviewDecision.deadlineOption);
       setSubmission(updated);
       navigate(getDefaultRouteForRole(user.role));
     } catch (error) {
       setReviewError(error.response?.data?.message || 'Failed to submit review. Please try again.');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handlePiDecision = async (decision) => {
+    setSavingPiDecision(true);
+    try {
+      const updated = await setPiDeclaration(id, decision);
+      setSubmission(updated);
+    } catch (error) {
+      console.error('Failed to record PI declaration decision:', error);
+    } finally {
+      setSavingPiDecision(false);
     }
   };
 
@@ -132,9 +157,7 @@ function ViewSubmission({ user, onLogout }) {
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
           <h3 className="text-base font-semibold text-foreground">Submission not found</h3>
-          <Button onClick={() => navigate(backPath)}>
-            Back to {isReviewer ? 'Review Dashboard' : 'Dashboard'}
-          </Button>
+          <Button onClick={() => navigate(backPath)}>Back to Dashboard</Button>
         </CardContent>
       </Card>
     );
@@ -153,7 +176,7 @@ function ViewSubmission({ user, onLogout }) {
           <>
             {canEdit && (
               <Button size="sm" onClick={() => navigate(`/submission/${id}/edit`)}>
-                {submission?.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                {REVISION_STATUSES.includes(submission?.status) ? 'Revise' : 'Edit'}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => navigate(backPath)}>
@@ -174,7 +197,14 @@ function ViewSubmission({ user, onLogout }) {
                 Submitted: {formatDate(submission.submittedDate)}
               </p>
             </div>
-            <StatusBadge status={submission.status} />
+            <div className="flex flex-col items-end gap-1">
+              <StatusBadge status={submission.status} />
+              {submission.revision?.deadline && (
+                <span className={cn('text-xs font-medium', remainingTone(submission.revision.deadline))}>
+                  Revision deadline: {formatRemaining(submission.revision.deadline)}
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -321,9 +351,46 @@ function ViewSubmission({ user, onLogout }) {
         </SectionCard>
 
         <SectionCard title="Section 6: Declaration">
-          <InfoRow label="PI Name" value={formData.piName} />
-          <InfoRow label="Signature" value={formData.piSignature} />
-          <InfoRow label="Date" value={formData.declarationDate} />
+          <InfoRow label="PI Name" value={formData.principalInvestigator?.fullName || formData.piName} />
+          <InfoRow label="PI Email" value={formData.principalInvestigator?.email} />
+          <InfoRow
+            label="PI declaration decision"
+            value={
+              !submission.piDeclarationApproval?.status
+                ? 'Not requested'
+                : submission.piDeclarationApproval.status === 'pending'
+                  ? 'Pending PI approval'
+                  : submission.piDeclarationApproval.status === 'approved'
+                    ? 'Approved'
+                    : 'Disapproved'
+            }
+          />
+          {submission.piDeclarationApproval?.decidedAt && (
+            <InfoRow
+              label="Decision date"
+              value={new Date(submission.piDeclarationApproval.decidedAt).toLocaleDateString()}
+            />
+          )}
+          {isAdmin && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <span className="text-sm text-muted-foreground">Record decision on the PI's behalf:</span>
+              <Button
+                size="sm"
+                onClick={() => handlePiDecision('approve')}
+                disabled={savingPiDecision || piDeclarationApproved}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => handlePiDecision('reject')}
+                disabled={savingPiDecision || submission.piDeclarationApproval?.status === 'rejected'}
+              >
+                Disapprove
+              </Button>
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="Section 7: Research Proposal">
@@ -366,6 +433,22 @@ function ViewSubmission({ user, onLogout }) {
           </SectionCard>
         )}
 
+        {isAssignedReviewer && submission?.status === 'under_review' && !reviewUnlocked && (
+          <Alert>
+            <AlertDescription>
+              {!reviewerAccepted
+                ? submission.reviewerAcceptance?.status === 'rejected'
+                  ? 'You declined this review request.'
+                  : 'Please accept the review request sent to your email before reviewing.'
+                : `Review is locked until the Principal Investigator approves the Declaration${
+                    submission.piDeclarationApproval?.status === 'rejected'
+                      ? '. The PI has disapproved this declaration.'
+                      : ' (currently pending).'
+                  }`}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {canSubmitReview && (
           <Card>
             <CardHeader className="border-b">
@@ -386,12 +469,37 @@ function ViewSubmission({ user, onLogout }) {
                   <Select value={reviewDecision.status} onValueChange={(v) => setReviewDecision((prev) => ({ ...prev, status: v }))}>
                     <SelectTrigger id="reviewStatus" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="approved">Approve</SelectItem>
-                      <SelectItem value="revisions_required">Request Revisions</SelectItem>
-                      <SelectItem value="rejected">Reject</SelectItem>
+                      {REVIEW_DECISIONS.map((d) => (
+                        <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+                {REVISION_STATUSES.includes(reviewDecision.status) &&
+                  (submission?.revision?.round || 0) >= 1 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="reviewDeadline">Revision deadline</Label>
+                      <Select
+                        value={reviewDecision.deadlineOption}
+                        onValueChange={(v) => setReviewDecision((prev) => ({ ...prev, deadlineOption: v }))}
+                      >
+                        <SelectTrigger id="reviewDeadline" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1_week">1 week</SelectItem>
+                          <SelectItem value="2_weeks">2 weeks</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Second revision. Researcher must resubmit within this window or the form is cancelled.
+                      </p>
+                    </div>
+                  )}
+                {REVISION_STATUSES.includes(reviewDecision.status) &&
+                  (submission?.revision?.round || 0) === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      First revision: the researcher is given <strong>30 days</strong> to resubmit before the form is cancelled.
+                    </p>
+                  )}
                 <div className="space-y-2">
                   <Label htmlFor="reviewComments">Overall review comments *</Label>
                   <Textarea

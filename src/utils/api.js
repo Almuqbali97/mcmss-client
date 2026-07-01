@@ -244,8 +244,13 @@ export const assignReviewer = async (id, reviewerId) => {
   return getData(response);
 };
 
-export const submitReview = async (id, status, comments) => {
-  const response = await api.post(`/submissions/${id}/review`, { status, comments });
+export const submitReview = async (id, status, comments, revisionDeadlineOption) => {
+  const response = await api.post(`/submissions/${id}/review`, { status, comments, revisionDeadlineOption });
+  return getData(response);
+};
+
+export const setPiDeclaration = async (id, decision) => {
+  const response = await api.post(`/submissions/${id}/pi-declaration`, { decision });
   return getData(response);
 };
 
@@ -254,8 +259,18 @@ export const updateFieldComments = async (id, fieldComments) => {
   return getData(response);
 };
 
+export const getAssignedSubmissions = async () => {
+  const response = await api.get('/submissions/assigned');
+  return getData(response);
+};
+
 export const getReviewers = async () => {
   const response = await api.get('/reviewers');
+  return getData(response);
+};
+
+export const getReviewerCandidates = async () => {
+  const response = await api.get('/reviewers/candidates');
   return getData(response);
 };
 

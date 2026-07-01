@@ -5,11 +5,13 @@ import { ClipboardList, BookOpen, Plus, Trash2, Loader2 } from 'lucide-react';
 import {
   getSubmissions,
   getPublicationFundingApplications,
+  getAssignedSubmissions,
   deleteSubmission,
   deletePublicationFunding,
 } from '../utils/api';
 import AppHeader from './AppHeader';
 import { StatusBadge } from './StatusBadge';
+import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -57,7 +59,7 @@ const FORM_TYPES = [
   },
 ];
 
-const EDITABLE_STATUSES = ['draft', 'revisions_required'];
+const EDITABLE_STATUSES = ['draft', ...REVISION_STATUSES];
 
 function FormTypeCard({ form, count, onStart, onViewApplications }) {
   const { Icon } = form;
@@ -91,12 +93,13 @@ function FormTypeCard({ form, count, onStart, onViewApplications }) {
 function Dashboard({ user, onLogout }) {
   const [ethicsSubmissions, setEthicsSubmissions] = useState([]);
   const [publicationApps, setPublicationApps] = useState([]);
+  const [assignedReviews, setAssignedReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('ethics');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
-  const isReviewer = user.role === 'reviewer';
+  const isReviewer = !!user.isReviewer;
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -124,12 +127,14 @@ function Dashboard({ user, onLogout }) {
 
   const loadData = async () => {
     try {
-      const [ethics, publication] = await Promise.all([
+      const [ethics, publication, assigned] = await Promise.all([
         getSubmissions(),
         getPublicationFundingApplications(),
+        user.isReviewer ? getAssignedSubmissions().catch(() => []) : Promise.resolve([]),
       ]);
       setEthicsSubmissions(ethics);
       setPublicationApps(publication);
+      setAssignedReviews(assigned || []);
     } catch (error) {
       console.error('Failed to load applications:', error);
     } finally {
@@ -163,7 +168,6 @@ function Dashboard({ user, onLogout }) {
 
   const renderTable = (rows, isPublication) => {
     const titleHeader = isPublication ? 'Manuscript Title' : 'Research Title';
-    const personHeader = isPublication ? 'Applicant' : 'Principal Investigator';
     const basePath = isPublication ? '/publication-funding' : '/submission';
 
     return (
@@ -171,7 +175,6 @@ function Dashboard({ user, onLogout }) {
         <TableHeader>
           <TableRow>
             <TableHead>{titleHeader}</TableHead>
-            {isReviewer && <TableHead>{personHeader}</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead>Submitted Date</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -192,9 +195,13 @@ function Dashboard({ user, onLogout }) {
                   <div className="font-medium text-foreground whitespace-normal">{title}</div>
                   <div className="text-xs text-muted-foreground">{subId}</div>
                 </TableCell>
-                {isReviewer && <TableCell>{getInvestigatorName(item, isPublication)}</TableCell>}
                 <TableCell>
                   <StatusBadge status={item.status} />
+                  {!isPublication && item.revision?.deadline && (
+                    <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
+                      {formatRemaining(item.revision.deadline)}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
                 <TableCell>
@@ -202,17 +209,12 @@ function Dashboard({ user, onLogout }) {
                     <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
                       View
                     </Button>
-                    {isReviewer && item.status === 'under_review' && (
-                      <Button size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
-                        Review
-                      </Button>
-                    )}
-                    {!isReviewer && EDITABLE_STATUSES.includes(item.status) && (
+                    {EDITABLE_STATUSES.includes(item.status) && (
                       <Button variant="secondary" size="sm" onClick={() => navigate(`${basePath}/${id}/edit`)}>
-                        {item.status === 'revisions_required' ? 'Revise' : 'Edit'}
+                        {REVISION_STATUSES.includes(item.status) ? 'Revise' : 'Edit'}
                       </Button>
                     )}
-                    {!isReviewer && item.status === 'draft' && (
+                    {item.status === 'draft' && (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -258,16 +260,10 @@ function Dashboard({ user, onLogout }) {
               <Icon className="size-6" />
             </div>
             <h3 className="text-base font-semibold text-foreground">
-              {isReviewer
-                ? 'No assigned items'
-                : isPublication
-                  ? 'No publication funding applications yet'
-                  : 'No ethics submissions yet'}
+              {isPublication ? 'No publication funding applications yet' : 'No ethics submissions yet'}
             </h3>
             <p className="max-w-sm text-sm text-muted-foreground">
-              {isReviewer
-                ? 'Assigned items will appear here once an administrator assigns them to you.'
-                : 'Your submitted applications will appear here.'}
+              Your submitted applications will appear here.
             </p>
           </CardContent>
         </Card>
@@ -281,40 +277,116 @@ function Dashboard({ user, onLogout }) {
     );
   };
 
+  const renderAssignmentsTable = () => {
+    if (loading) {
+      return (
+        <Card>
+          <CardContent className="space-y-3 py-2">
+            {[0, 1].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+          </CardContent>
+        </Card>
+      );
+    }
+    if (assignedReviews.length === 0) {
+      return (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No submissions assigned to you yet.
+          </CardContent>
+        </Card>
+      );
+    }
+    return (
+      <Card className="overflow-hidden py-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Research Title</TableHead>
+              <TableHead>Principal Investigator</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Your response</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {assignedReviews.map((item) => {
+              const id = item._id || item.id;
+              const accepted = item.reviewerAcceptance?.status === 'accepted';
+              const declined = item.reviewerAcceptance?.status === 'rejected';
+              return (
+                <TableRow key={id}>
+                  <TableCell className="max-w-xs">
+                    <div className="font-medium text-foreground whitespace-normal">
+                      {item.researchTitle || 'Untitled Research'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{item.submissionId || `#${id}`}</div>
+                  </TableCell>
+                  <TableCell>{getInvestigatorName(item)}</TableCell>
+                  <TableCell><StatusBadge status={item.status} /></TableCell>
+                  <TableCell>
+                    <span className={accepted ? 'text-success' : declined ? 'text-destructive' : 'text-muted-foreground'}>
+                      {accepted ? 'Accepted' : declined ? 'Declined' : 'Awaiting (check email)'}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/submission/${id}`)}>
+                        View
+                      </Button>
+                      {accepted && item.status === 'under_review' && (
+                        <Button size="sm" onClick={() => navigate(`/submission/${id}`)}>
+                          Review
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader user={user} onLogout={onLogout} />
 
       <main className="mx-auto max-w-[1300px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
         <section>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            {isReviewer ? 'Assigned Reviews' : 'Application Portal'}
-          </h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Application Portal</h2>
           <p className="mt-1 text-muted-foreground">
-            {isReviewer
-              ? 'Review submissions and publication funding applications assigned to you by the committee.'
-              : 'Choose a form below to start a new application, or view your existing submissions.'}
+            Choose a form below to start a new application, or view your existing submissions.
           </p>
         </section>
 
-        {!isReviewer && (
-          <section className="grid gap-5 md:grid-cols-2" aria-label="Available forms">
-            {FORM_TYPES.map((form) => (
-              <FormTypeCard
-                key={form.id}
-                form={form}
-                count={counts[form.id]}
-                onStart={() => navigate(form.newRoute)}
-                onViewApplications={() => setActiveTab(form.id)}
-              />
-            ))}
+        <section className="grid gap-5 md:grid-cols-2" aria-label="Available forms">
+          {FORM_TYPES.map((form) => (
+            <FormTypeCard
+              key={form.id}
+              form={form}
+              count={counts[form.id]}
+              onStart={() => navigate(form.newRoute)}
+              onViewApplications={() => setActiveTab(form.id)}
+            />
+          ))}
+        </section>
+
+        {isReviewer && (
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Assigned Reviews</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Submissions assigned to you as a reviewer. Accept the request from your email, then submit your decision.
+              </p>
+            </div>
+            {renderAssignmentsTable()}
           </section>
         )}
 
         <section className="space-y-4">
-          <h3 className="text-lg font-semibold text-foreground">
-            {isReviewer ? 'Your assignments' : 'My applications'}
-          </h3>
+          <h3 className="text-lg font-semibold text-foreground">My applications</h3>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
             <TabsList>
               {FORM_TYPES.map((form) => (
