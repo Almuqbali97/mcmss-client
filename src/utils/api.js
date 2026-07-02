@@ -259,6 +259,13 @@ export const updateFieldComments = async (id, fieldComments) => {
   return getData(response);
 };
 
+export const uploadApprovalCertificate = async (id, file) => {
+  const fd = new FormData();
+  fd.append('approvalCertificate', file);
+  const response = await api.post(`/submissions/${id}/approval-certificate`, fd);
+  return getData(response);
+};
+
 export const getAssignedSubmissions = async () => {
   const response = await api.get('/submissions/assigned');
   return getData(response);

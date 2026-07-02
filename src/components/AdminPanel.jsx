@@ -425,7 +425,7 @@ function AdminPanel({ user, onLogout }) {
           <TableCell className="max-w-xs font-medium whitespace-normal">{title}</TableCell>
           <TableCell>{person}</TableCell>
           <TableCell>
-            <StatusBadge status={item.status} />
+            <StatusBadge submission={isPublicationTab ? undefined : item} status={item.status} />
             {!isPublicationTab && item.revision?.deadline && (
               <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
                 {formatRemaining(item.revision.deadline)}
@@ -435,27 +435,7 @@ function AdminPanel({ user, onLogout }) {
           <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
           <TableCell>
             {item.assignedReviewer ? (
-              <div className="flex flex-col">
-                <span>{item.assignedReviewer}</span>
-                {!isPublicationTab && item.reviewerAcceptance?.status && (
-                  <span
-                    className={cn(
-                      'text-xs',
-                      item.reviewerAcceptance.status === 'accepted'
-                        ? 'text-success'
-                        : item.reviewerAcceptance.status === 'rejected'
-                          ? 'text-destructive'
-                          : 'text-muted-foreground'
-                    )}
-                  >
-                    {item.reviewerAcceptance.status === 'accepted'
-                      ? 'Accepted'
-                      : item.reviewerAcceptance.status === 'rejected'
-                        ? 'Declined'
-                        : 'Awaiting acceptance'}
-                  </span>
-                )}
-              </div>
+              <span>{item.assignedReviewer}</span>
             ) : (
               <span className="text-muted-foreground">Not assigned</span>
             )}
@@ -471,9 +451,14 @@ function AdminPanel({ user, onLogout }) {
                 </Button>
               )}
               {item.status === 'under_review' && item.assignedReviewer && (
-                <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
-                  Review
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
+                    Change reviewer
+                  </Button>
+                  <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
+                    Review
+                  </Button>
+                </>
               )}
               <Button variant="ghost" size="icon" title="Export" onClick={() => handleExport(id, type)}>
                 <Download />

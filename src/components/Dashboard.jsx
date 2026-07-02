@@ -196,7 +196,7 @@ function Dashboard({ user, onLogout }) {
                   <div className="text-xs text-muted-foreground">{subId}</div>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge submission={isPublication ? undefined : item} status={item.status} />
                   {!isPublication && item.revision?.deadline && (
                     <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
                       {formatRemaining(item.revision.deadline)}
@@ -304,15 +304,12 @@ function Dashboard({ user, onLogout }) {
               <TableHead>Research Title</TableHead>
               <TableHead>Principal Investigator</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Your response</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {assignedReviews.map((item) => {
               const id = item._id || item.id;
-              const accepted = item.reviewerAcceptance?.status === 'accepted';
-              const declined = item.reviewerAcceptance?.status === 'rejected';
               return (
                 <TableRow key={id}>
                   <TableCell className="max-w-xs">
@@ -322,22 +319,12 @@ function Dashboard({ user, onLogout }) {
                     <div className="text-xs text-muted-foreground">{item.submissionId || `#${id}`}</div>
                   </TableCell>
                   <TableCell>{getInvestigatorName(item)}</TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell>
-                    <span className={accepted ? 'text-success' : declined ? 'text-destructive' : 'text-muted-foreground'}>
-                      {accepted ? 'Accepted' : declined ? 'Declined' : 'Awaiting (check email)'}
-                    </span>
-                  </TableCell>
+                  <TableCell><StatusBadge submission={item} status={item.status} /></TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/submission/${id}`)}>
+                      <Button size="sm" onClick={() => navigate(`/submission/${id}`)}>
                         View
                       </Button>
-                      {accepted && item.status === 'under_review' && (
-                        <Button size="sm" onClick={() => navigate(`/submission/${id}`)}>
-                          Review
-                        </Button>
-                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -378,7 +365,7 @@ function Dashboard({ user, onLogout }) {
             <div>
               <h3 className="text-lg font-semibold text-foreground">Assigned Reviews</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Submissions assigned to you as a reviewer. Accept the request from your email, then submit your decision.
+                Submissions assigned to you as a reviewer. Open one to submit your decision.
               </p>
             </div>
             {renderAssignmentsTable()}

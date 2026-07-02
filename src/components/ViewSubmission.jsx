@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSubmission, updateFieldComments, submitReview, setPiDeclaration } from '../utils/api';
+import { getSubmission, updateFieldComments, submitReview, setPiDeclaration, uploadApprovalCertificate } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AppHeader from './AppHeader';
 import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
@@ -44,19 +44,20 @@ function ViewSubmission({ user, onLogout }) {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [savingPiDecision, setSavingPiDecision] = useState(false);
+  const [uploadingCertificate, setUploadingCertificate] = useState(false);
+  const [certificateError, setCertificateError] = useState('');
 
   const isAdmin = user?.role === 'admin';
   const piDeclarationApproved = submission?.piDeclarationApproval?.status === 'approved';
-  const reviewerAccepted = submission?.reviewerAcceptance?.status === 'accepted';
   // The submitter viewing their own submission is never acting as its reviewer, even if
   // they hold reviewer capability. The backend only serves this to submitter/assigned-reviewer/admin.
   const submitterId = submission?.submittedBy?._id || submission?.submittedBy?.id;
   const isSubmitter = !!submitterId && String(submitterId) === String(user?.id);
   const isAssignedReviewer =
     !!user?.isReviewer && !isAdmin && !isSubmitter && !!submission?.assignedReviewerId;
-  // Reviewers must have accepted the assignment AND the PI must have approved; admins may override both.
+  // The PI must have approved before a reviewer can act; admins may override.
   const reviewUnlocked =
-    submission?.status === 'under_review' && (isAdmin || (piDeclarationApproved && reviewerAccepted));
+    submission?.status === 'under_review' && (isAdmin || piDeclarationApproved);
   const canComment = (isAssignedReviewer || isAdmin) && reviewUnlocked;
   const canSubmitReview = (isAssignedReviewer || isAdmin) && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && EDITABLE_STATUSES.includes(submission?.status);
@@ -111,12 +112,11 @@ function ViewSubmission({ user, onLogout }) {
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     setReviewError('');
-    if (!reviewDecision.comments.trim()) {
-      setReviewError('Please provide overall review comments before submitting.');
-      return;
-    }
     setSubmittingReview(true);
     try {
+      // Persist the per-section comments first so they are saved with the review and
+      // show under their respective sections afterwards (no need to re-enter them below).
+      await updateFieldComments(id, fieldComments);
       const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments, reviewDecision.deadlineOption);
       setSubmission(updated);
       navigate(getDefaultRouteForRole(user.role));
@@ -124,6 +124,24 @@ function ViewSubmission({ user, onLogout }) {
       setReviewError(error.response?.data?.message || 'Failed to submit review. Please try again.');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleCertificateUpload = async (file) => {
+    if (!file) return;
+    setCertificateError('');
+    if (file.type !== 'application/pdf') {
+      setCertificateError('Please upload a PDF file.');
+      return;
+    }
+    setUploadingCertificate(true);
+    try {
+      const updated = await uploadApprovalCertificate(id, file);
+      setSubmission(updated);
+    } catch (error) {
+      setCertificateError(error.response?.data?.message || 'Failed to upload certificate. Please try again.');
+    } finally {
+      setUploadingCertificate(false);
     }
   };
 
@@ -198,7 +216,7 @@ function ViewSubmission({ user, onLogout }) {
               </p>
             </div>
             <div className="flex flex-col items-end gap-1">
-              <StatusBadge status={submission.status} />
+              <StatusBadge submission={submission} />
               {submission.revision?.deadline && (
                 <span className={cn('text-xs font-medium', remainingTone(submission.revision.deadline))}>
                   Revision deadline: {formatRemaining(submission.revision.deadline)}
@@ -207,6 +225,46 @@ function ViewSubmission({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+
+        {submission.status === 'approved' && (
+          <SectionCard title="Letter of Approval">
+            {submission.approvalCertificate?.path ? (
+              <FileList
+                label="Approval certificate"
+                files={[submission.approvalCertificate]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isAdmin
+                  ? 'No approval certificate uploaded yet. Upload the signed letter of approval (PDF) below.'
+                  : 'The letter of approval has not been uploaded yet. Please check back later.'}
+              </p>
+            )}
+            {isAdmin && (
+              <div className="mt-3 space-y-2 border-t border-border pt-3">
+                <Label htmlFor="approvalCertificate" className="text-sm text-muted-foreground">
+                  {submission.approvalCertificate?.path
+                    ? 'Replace the approval certificate (PDF):'
+                    : 'Upload the approval certificate (PDF):'}
+                </Label>
+                <input
+                  id="approvalCertificate"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  disabled={uploadingCertificate}
+                  onChange={(e) => handleCertificateUpload(e.target.files?.[0])}
+                  className="block text-sm"
+                />
+                {uploadingCertificate && (
+                  <p className="text-xs text-muted-foreground">Uploading...</p>
+                )}
+                {certificateError && (
+                  <p className="text-xs text-destructive">{certificateError}</p>
+                )}
+              </div>
+            )}
+          </SectionCard>
+        )}
 
         <SectionCard title="Section 1: Terms and Conditions">
           <InfoRow label="Research Title" value={formData.researchTitle} />
@@ -424,6 +482,7 @@ function ViewSubmission({ user, onLogout }) {
             </div>
           )}
           <FileList label="Sample Size Calculation Files" files={formData.sampleSizeFiles} />
+          <FileList label="Data & Research Variables Files" files={formData.dataVariablesFiles} />
           <FileList label="Research Proposal Files" files={formData.researchProposalFiles} />
         </SectionCard>
 
@@ -436,15 +495,11 @@ function ViewSubmission({ user, onLogout }) {
         {isAssignedReviewer && submission?.status === 'under_review' && !reviewUnlocked && (
           <Alert>
             <AlertDescription>
-              {!reviewerAccepted
-                ? submission.reviewerAcceptance?.status === 'rejected'
-                  ? 'You declined this review request.'
-                  : 'Please accept the review request sent to your email before reviewing.'
-                : `Review is locked until the Principal Investigator approves the Declaration${
-                    submission.piDeclarationApproval?.status === 'rejected'
-                      ? '. The PI has disapproved this declaration.'
-                      : ' (currently pending).'
-                  }`}
+              {`Review is locked until the Principal Investigator approves the Declaration${
+                submission.piDeclarationApproval?.status === 'rejected'
+                  ? '. The PI has disapproved this declaration.'
+                  : ' (currently pending).'
+              }`}
             </AlertDescription>
           </Alert>
         )}
@@ -454,7 +509,8 @@ function ViewSubmission({ user, onLogout }) {
             <CardHeader className="border-b">
               <CardTitle className="text-base">Submit Review Decision</CardTitle>
               <CardDescription>
-                Add field-level comments in Section 7 above, then submit your overall decision below.
+                Add your comments per section in Section 7 above — they are saved with your review and
+                shown under each section. The overall summary below is optional.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -501,14 +557,13 @@ function ViewSubmission({ user, onLogout }) {
                     </p>
                   )}
                 <div className="space-y-2">
-                  <Label htmlFor="reviewComments">Overall review comments *</Label>
+                  <Label htmlFor="reviewComments">Overall review comments (optional)</Label>
                   <Textarea
                     id="reviewComments"
                     rows={5}
                     value={reviewDecision.comments}
                     onChange={(e) => setReviewDecision((prev) => ({ ...prev, comments: e.target.value }))}
-                    placeholder="Summarize your review decision and any required changes..."
-                    required
+                    placeholder="Optional summary of your decision. Section-specific comments go in Section 7 above."
                   />
                 </div>
                 <div className="flex justify-end gap-3">

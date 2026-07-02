@@ -32,7 +32,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { cn, REVISION_STATUSES } from '@/lib/utils';
 
 const STEPS = [
   { id: 1, title: 'Terms & Conditions', section: 'section1' },
@@ -197,6 +197,7 @@ function SubmissionForm({ user, onLogout }) {
   const [showMCMSSModal, setShowMCMSSModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessView, setShowSuccessView] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formData, setFormData] = useState({
     researchTitle: '',
@@ -352,6 +353,7 @@ function SubmissionForm({ user, onLogout }) {
   const loadSubmission = async () => {
     try {
       const submission = await getSubmission(id);
+      setSubmissionStatus(submission.status);
       if (submission.formData) {
         const fd = submission.formData;
         setFormData({
@@ -428,6 +430,10 @@ function SubmissionForm({ user, onLogout }) {
     }
   };
 
+  // On a revision, previously uploaded files must be kept for the record. Researchers
+  // may add new files but cannot delete existing ones.
+  const isRevision = REVISION_STATUSES.includes(submissionStatus);
+
   const FILE_LIMITS = { informationSheetFiles: 2 };
 
   const handleFileChange = (field, files) => {
@@ -441,10 +447,15 @@ function SubmissionForm({ user, onLogout }) {
   };
 
   const removeFile = (field, index) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: prev[field].filter((_, i) => i !== index),
-    }));
+    setFormData((prev) => {
+      const current = prev[field] || [];
+      const target = current[index];
+      // Guard: on a revision, existing (already-uploaded) files cannot be removed.
+      if (isRevision && target && !(target instanceof File)) {
+        return prev;
+      }
+      return { ...prev, [field]: current.filter((_, i) => i !== index) };
+    });
   };
 
   const handleEthicsApprovalFiles = (files) => {
@@ -1005,7 +1016,7 @@ function SubmissionForm({ user, onLogout }) {
             <strong className="text-foreground">The Information Sheet must conclude with the statement:</strong> "The Medical City For Military and Security Services Research Committee has reviewed and approved this project."
           </div>
           <Field label="Please upload the information sheet" required hint="Please upload both the English and Arabic versions (maximum 2 files)." error={fieldErrors.informationSheetFiles}>
-            <FileUpload field="informationSheetFiles" files={formData.informationSheetFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" maxFiles={2} error={fieldErrors.informationSheetFiles} />
+            <FileUpload field="informationSheetFiles" files={formData.informationSheetFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={2} error={fieldErrors.informationSheetFiles} />
           </Field>
 
           <StepHeading title="Consent Form Requirements" />
@@ -1023,7 +1034,7 @@ function SubmissionForm({ user, onLogout }) {
             </ol>
           </div>
           <Field label="Please upload the consent form(s) in Arabic and English" required error={fieldErrors.consentFormFiles}>
-            <FileUpload field="consentFormFiles" files={formData.consentFormFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" error={fieldErrors.consentFormFiles} />
+            <FileUpload field="consentFormFiles" files={formData.consentFormFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" error={fieldErrors.consentFormFiles} />
           </Field>
         </>
       )}
@@ -1101,7 +1112,7 @@ function SubmissionForm({ user, onLogout }) {
             </Field>
           </div>
           <Field label="Please upload documents confirming the details of the grant" required error={fieldErrors.grantDocuments}>
-            <FileUpload field="grantDocuments" files={formData.grantDocuments} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" error={fieldErrors.grantDocuments} />
+            <FileUpload field="grantDocuments" files={formData.grantDocuments} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" error={fieldErrors.grantDocuments} />
           </Field>
         </>
       )}
@@ -1162,7 +1173,7 @@ function SubmissionForm({ user, onLogout }) {
           </Field>
           {formData.previousEthicsProjectApproved === 'Yes' && (
             <Field label="Please attach a copy of ethics approval(s) obtained." required error={fieldErrors.ethicsApprovalDocuments}>
-              <FileUpload field="ethicsApprovalDocuments" files={formData.ethicsApprovalDocuments} onAdd={(_, files) => handleEthicsApprovalFiles(files)} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" maxFiles={1} error={fieldErrors.ethicsApprovalDocuments} />
+              <FileUpload field="ethicsApprovalDocuments" files={formData.ethicsApprovalDocuments} onAdd={(_, files) => handleEthicsApprovalFiles(files)} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} error={fieldErrors.ethicsApprovalDocuments} />
             </Field>
           )}
         </>
@@ -1284,7 +1295,7 @@ function SubmissionForm({ user, onLogout }) {
                 <Textarea id="bloodTissueDiscardExplanation" rows={4} value={formData.bloodTissueDiscardExplanation} onChange={(e) => handleChange('bloodTissueDiscardExplanation', e.target.value)} />
               </Field>
               <Field label="Please upload all supporting documents" required error={fieldErrors.bloodTissueAbroadDocuments}>
-                <FileUpload field="bloodTissueAbroadDocuments" files={formData.bloodTissueAbroadDocuments} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" maxFiles={5} error={fieldErrors.bloodTissueAbroadDocuments} />
+                <FileUpload field="bloodTissueAbroadDocuments" files={formData.bloodTissueAbroadDocuments} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={5} error={fieldErrors.bloodTissueAbroadDocuments} />
               </Field>
             </>
           )}
@@ -1328,7 +1339,7 @@ function SubmissionForm({ user, onLogout }) {
         <Textarea id="methodology" rows={6} value={formData.methodology} onChange={(e) => handleChange('methodology', e.target.value)} placeholder="Describe your research methodology" />
       </Field>
       <Field label="Sample Size Calculation" required>
-        <FileUpload field="sampleSizeFiles" files={formData.sampleSizeFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" />
+        <FileUpload field="sampleSizeFiles" files={formData.sampleSizeFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
       </Field>
       <Field label="Statistical Analysis" required htmlFor="statisticalAnalysis" error={fieldErrors.statisticalAnalysis}>
         <Textarea id="statisticalAnalysis" rows={4} value={formData.statisticalAnalysis} onChange={(e) => handleChange('statisticalAnalysis', e.target.value)} placeholder="Describe your statistical analysis methods" />
@@ -1337,7 +1348,7 @@ function SubmissionForm({ user, onLogout }) {
         <Textarea id="intervention" rows={4} value={formData.intervention} onChange={(e) => handleChange('intervention', e.target.value)} placeholder="Describe any interventions" />
       </Field>
       <Field label="Data and Research Variables">
-        <FileUpload field="dataVariablesFiles" files={formData.dataVariablesFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" />
+        <FileUpload field="dataVariablesFiles" files={formData.dataVariablesFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
       </Field>
       <Field label="Expected Outcomes" required htmlFor="expectedOutcomes" error={fieldErrors.expectedOutcomes}>
         <Textarea id="expectedOutcomes" rows={4} value={formData.expectedOutcomes} onChange={(e) => handleChange('expectedOutcomes', e.target.value)} placeholder="Describe expected outcomes" />
@@ -1346,7 +1357,7 @@ function SubmissionForm({ user, onLogout }) {
         <Textarea id="references" rows={6} value={formData.references} onChange={(e) => handleChange('references', e.target.value)} placeholder="List your references" />
       </Field>
       <Field label="Upload Research Proposal" required>
-        <FileUpload field="researchProposalFiles" files={formData.researchProposalFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} accept=".pdf,.doc,.docx" />
+        <FileUpload field="researchProposalFiles" files={formData.researchProposalFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
       </Field>
     </div>
   );

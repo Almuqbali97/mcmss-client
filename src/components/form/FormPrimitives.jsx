@@ -152,6 +152,7 @@ export function FileUpload({
   accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png',
   maxFiles = 5,
   error,
+  lockExisting = false,
 }) {
   const inputId = `file-${field}`;
   return (
@@ -181,22 +182,31 @@ export function FileUpload({
       </label>
       {files?.length > 0 && (
         <ul className="space-y-1.5">
-          {files.map((file, index) => (
-            <li
-              key={index}
-              className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
-            >
-              <span className="truncate">{getFileName(file)}</span>
-              <button
-                type="button"
-                onClick={() => onRemove(field, index)}
-                className="text-muted-foreground transition-colors hover:text-destructive"
-                aria-label="Remove file"
+          {files.map((file, index) => {
+            // Already-uploaded files are plain objects; newly picked ones are File instances.
+            const isExisting = !(file instanceof File);
+            const removable = !(lockExisting && isExisting);
+            return (
+              <li
+                key={index}
+                className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
-                <X className="size-4" />
-              </button>
-            </li>
-          ))}
+                <span className="truncate">{getFileName(file)}</span>
+                {removable ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(field, index)}
+                    className="text-muted-foreground transition-colors hover:text-destructive"
+                    aria-label="Remove file"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Kept on file</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
