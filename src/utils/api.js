@@ -380,11 +380,6 @@ export const deletePublicationFunding = async (id) => {
   await api.delete(`/publication-funding/${id}`);
 };
 
-export const assignPublicationFundingReviewer = async (id, reviewerId) => {
-  const response = await api.post(`/publication-funding/${id}/assign-reviewer`, { reviewerId });
-  return getData(response);
-};
-
 export const submitPublicationFundingReview = async (id, status, comments) => {
   const response = await api.post(`/publication-funding/${id}/review`, { status, comments });
   return getData(response);

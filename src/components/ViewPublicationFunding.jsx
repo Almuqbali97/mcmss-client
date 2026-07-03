@@ -45,11 +45,10 @@ function ViewPublicationFunding({ user, onLogout }) {
   const [committeeReview, setCommitteeReview] = useState({});
   const [savingCommittee, setSavingCommittee] = useState(false);
 
-  const isReviewer = user?.role === 'reviewer';
   const isAdmin = user?.role === 'admin';
   const fd = application?.formData || {};
   const backPath = getDefaultRouteForRole(user?.role);
-  const canSubmitReview = (isReviewer || isAdmin) && application?.status === 'under_review';
+  const canSubmitReview = isAdmin && application?.status === 'under_review';
 
   useEffect(() => {
     loadApplication();

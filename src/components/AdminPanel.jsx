@@ -24,7 +24,6 @@ import {
   deleteReviewer,
   exportSubmission,
   getPublicationFundingApplications,
-  assignPublicationFundingReviewer,
   submitPublicationFundingReview,
   exportPublicationFunding,
   getAdminUsers,
@@ -186,11 +185,7 @@ function AdminPanel({ user, onLogout }) {
 
   const handleAssignReviewer = async (submissionId, reviewerId) => {
     try {
-      if (selectedApplicationType === 'publication') {
-        await assignPublicationFundingReviewer(submissionId, reviewerId);
-      } else {
-        await assignReviewer(submissionId, reviewerId);
-      }
+      await assignReviewer(submissionId, reviewerId);
       await loadData();
       setShowAssignModal(false);
       setSelectedSubmission(null);
@@ -434,7 +429,9 @@ function AdminPanel({ user, onLogout }) {
           </TableCell>
           <TableCell className="text-muted-foreground">{formatDate(item.submittedDate)}</TableCell>
           <TableCell>
-            {item.assignedReviewer ? (
+            {isPublicationTab ? (
+              <span className="text-muted-foreground">Admin</span>
+            ) : item.assignedReviewer ? (
               <span>{item.assignedReviewer}</span>
             ) : (
               <span className="text-muted-foreground">Not assigned</span>
@@ -445,21 +442,31 @@ function AdminPanel({ user, onLogout }) {
               <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
                 View
               </Button>
-              {item.status === 'under_review' && !item.assignedReviewer && (
-                <Button size="sm" onClick={() => openAssignModal(item, type)}>
-                  Assign
-                </Button>
-              )}
-              {item.status === 'under_review' && item.assignedReviewer && (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
-                    Change reviewer
-                  </Button>
-                  <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
-                    Review
-                  </Button>
-                </>
-              )}
+              {isPublicationTab
+                ? item.status === 'under_review' && (
+                    <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
+                      Review
+                    </Button>
+                  )
+                : (
+                  <>
+                    {item.status === 'under_review' && !item.assignedReviewer && (
+                      <Button size="sm" onClick={() => openAssignModal(item, type)}>
+                        Assign
+                      </Button>
+                    )}
+                    {item.status === 'under_review' && item.assignedReviewer && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
+                          Change reviewer
+                        </Button>
+                        <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
+                          Review
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
               <Button variant="ghost" size="icon" title="Export" onClick={() => handleExport(id, type)}>
                 <Download />
               </Button>
