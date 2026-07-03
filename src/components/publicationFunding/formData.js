@@ -14,10 +14,8 @@ export const PF_FILE_FIELDS = [
   'frontPageOrArticleFiles',
   'proofOfPaymentFiles',
   'acceptanceLetterFiles',
-  'publishedArticleFiles',
   'invoiceReceiptFiles',
   'irbApprovalFiles',
-  'copeDoajProofFiles',
   'additionalSupportingFiles',
 ];
 
@@ -80,20 +78,15 @@ export const createInitialFormData = (user) => ({
 
   attachmentChecklist: {
     acceptanceLetter: false,
-    publishedArticle: false,
-    irbLetter: false,
-    copeDoajProof: false,
     additional: false,
   },
   acceptanceLetterFiles: [],
-  publishedArticleFiles: [],
   invoiceReceiptFiles: [],
   irbApprovalFiles: [],
-  copeDoajProofFiles: [],
   additionalSupportingFiles: [],
 
-  applicantDeclarationName: '',
-  applicantDeclarationDate: '',
+  applicantDeclarationName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}`.trim() : '',
+  applicantDeclarationDate: new Date().toISOString().slice(0, 10),
 });
 
 export const ELIGIBILITY_ITEMS = [
@@ -110,10 +103,7 @@ export const ELIGIBILITY_ITEMS = [
 ];
 
 export const ATTACHMENT_ITEMS = [
-  { key: 'acceptanceLetter', label: 'Acceptance letter from the journal', files: 'acceptanceLetterFiles' },
-  { key: 'publishedArticle', label: 'Final published article or front page of the article', files: 'publishedArticleFiles' },
-  { key: 'irbLetter', label: 'IRB / ethics approval letter, if applicable', files: 'irbApprovalFiles' },
-  { key: 'copeDoajProof', label: 'Proof of COPE / DOAJ compliance, if open-access fees are requested', files: 'copeDoajProofFiles' },
+  { key: 'acceptanceLetter', label: 'Acceptance letter from the journal', files: 'acceptanceLetterFiles', required: true },
   { key: 'additional', label: 'Any additional supporting documents', files: 'additionalSupportingFiles' },
 ];
 

@@ -472,9 +472,9 @@ function AdminPanel({ user, onLogout }) {
   const renderApplicationsView = () => (
     <div className="space-y-6">
       <Tabs value={applicationTab} onValueChange={setApplicationTab}>
-        <TabsList>
-          <TabsTrigger value="ethics">Ethics Submissions ({submissions.length})</TabsTrigger>
-          <TabsTrigger value="publication">Publication Funding ({publicationApps.length})</TabsTrigger>
+        <TabsList className="h-auto border border-border bg-card p-1">
+          <TabsTrigger className="px-4 py-1.5 text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm" value="ethics">Ethics Submissions ({submissions.length})</TabsTrigger>
+          <TabsTrigger className="px-4 py-1.5 text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm" value="publication">Publication Funding ({publicationApps.length})</TabsTrigger>
         </TabsList>
       </Tabs>
 

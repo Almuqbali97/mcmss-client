@@ -63,6 +63,35 @@ import {
 
 const FIELD_FILE_LIMITS = { proofOfPaymentFiles: 3 };
 
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+/* +968 prefixed Omani mobile input */
+function PhoneInput({ value, onChange, disabled, id }) {
+  return (
+    <div className="flex">
+      <span className="inline-flex items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+        +968
+      </span>
+      <Input
+        id={id}
+        type="tel"
+        className="rounded-l-none"
+        placeholder="9XXXXXXX"
+        maxLength={8}
+        disabled={disabled}
+        value={value?.replace(/^\+968/, '') || ''}
+        onChange={onChange}
+        onKeyDown={(e) => {
+          if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+          const raw = e.target.value.replace(/\D/g, '');
+          if (!/\d/.test(e.key)) e.preventDefault();
+          else if (raw.length >= 8) e.preventDefault();
+        }}
+      />
+    </div>
+  );
+}
+
 function PublicationFundingForm({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -73,6 +102,8 @@ function PublicationFundingForm({ user, onLogout }) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formData, setFormData] = useState(createInitialFormData(user));
+  const declarationName =
+    user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}`.trim() : formData.fullName || '';
 
   useEffect(() => {
     if (id) {
@@ -81,7 +112,12 @@ function PublicationFundingForm({ user, onLogout }) {
       const saved = localStorage.getItem('publicationFundingFormAutoSave');
       if (saved) {
         try {
-          setFormData((prev) => ({ ...prev, ...JSON.parse(saved) }));
+          setFormData((prev) => ({
+            ...prev,
+            ...JSON.parse(saved),
+            applicantDeclarationName: declarationName,
+            applicantDeclarationDate: todayISO(),
+          }));
         } catch (e) {
           console.error(e);
         }
@@ -115,6 +151,8 @@ function PublicationFundingForm({ user, onLogout }) {
           fundingItems: app.formData.fundingItems || prev.fundingItems,
           eligibilityChecklist: app.formData.eligibilityChecklist || prev.eligibilityChecklist,
           attachmentChecklist: app.formData.attachmentChecklist || prev.attachmentChecklist,
+          applicantDeclarationName: declarationName,
+          applicantDeclarationDate: todayISO(),
         }));
       }
     } catch (e) {
@@ -175,7 +213,11 @@ function PublicationFundingForm({ user, onLogout }) {
   const buildPayload = (status = 'draft') => ({
     manuscriptTitle: formData.manuscriptTitle,
     applicantName: formData.fullName,
-    formData,
+    formData: {
+      ...formData,
+      applicantDeclarationName: declarationName,
+      applicantDeclarationDate: todayISO(),
+    },
     status,
   });
 
@@ -260,10 +302,8 @@ function PublicationFundingForm({ user, onLogout }) {
           ['department', 'Department / Unit', 'text'],
           ['position', 'Position / Title', 'text'],
           ['email', 'Email address', 'email'],
-          ['phone', 'Phone number', 'tel'],
-          ['principalInvestigator', 'Principal Investigator (if different from applicant)', 'text'],
         ].map(([key, label, type]) => (
-          <Field key={key} label={label} required={key !== 'principalInvestigator'} htmlFor={key} error={fieldErrors[key]}>
+          <Field key={key} label={label} required htmlFor={key} error={fieldErrors[key]}>
             <Input
               id={key}
               type={type}
@@ -272,6 +312,27 @@ function PublicationFundingForm({ user, onLogout }) {
             />
           </Field>
         ))}
+        <Field label="Phone number" required htmlFor="phone" hint="Omani mobile only (8 digits, starts with 9)" error={fieldErrors.phone}>
+          <PhoneInput
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => {
+              let raw = e.target.value.replace(/\D/g, '');
+              if (raw.startsWith('968')) raw = raw.slice(3);
+              if (raw === '' || (raw.startsWith('9') && raw.length <= 8)) {
+                handleChange('phone', raw ? `+968${raw}` : '');
+              }
+            }}
+          />
+        </Field>
+        <Field label="Principal Investigator (if different from applicant)" htmlFor="principalInvestigator" error={fieldErrors.principalInvestigator}>
+          <Input
+            id="principalInvestigator"
+            type="text"
+            value={formData.principalInvestigator}
+            onChange={(e) => handleChange('principalInvestigator', e.target.value)}
+          />
+        </Field>
       </div>
     </div>
   );
@@ -381,10 +442,17 @@ function PublicationFundingForm({ user, onLogout }) {
     <div className="space-y-5">
       <StepHeading title="Section 5: Ethical and Administrative Compliance" />
       <Field label="Does the study have prior ethical approval?" required error={fieldErrors.priorEthicalApproval}>
-        <OptionRadioGroup value={formData.priorEthicalApproval} onChange={(v) => handleChange('priorEthicalApproval', v)} options={['Yes', 'No', 'Not applicable']} />
+        <OptionRadioGroup value={formData.priorEthicalApproval} onChange={(v) => handleChange('priorEthicalApproval', v)} options={['Yes', 'No']} />
       </Field>
       {formData.priorEthicalApproval === 'Yes' && (
         <div className="space-y-5">
+          <Field
+            label="IRB / ethics approval letter, if applicable"
+            required
+            error={fieldErrors.irbApprovalFiles}
+          >
+            <FileUpload field="irbApprovalFiles" files={formData.irbApprovalFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} error={fieldErrors.irbApprovalFiles} />
+          </Field>
           <Field label="IRB / ethics approval number" required error={fieldErrors.irbApprovalNumber}>
             <Input value={formData.irbApprovalNumber} onChange={(e) => handleChange('irbApprovalNumber', e.target.value)} />
           </Field>
@@ -495,15 +563,21 @@ function PublicationFundingForm({ user, onLogout }) {
     <div className="space-y-5">
       <StepHeading title="Section 7: Required Attachments" />
       <div className="space-y-4">
-        {ATTACHMENT_ITEMS.map(({ key, label, files }) => (
+        {ATTACHMENT_ITEMS.map(({ key, label, files, required }) => (
           <div key={key} className="rounded-lg border border-border p-4">
-            <CheckboxField
-              checked={!!formData.attachmentChecklist[key]}
-              onChange={() => handleChecklistToggle('attachmentChecklist', key)}
-            >
-              {label}
-            </CheckboxField>
-            {formData.attachmentChecklist[key] && (
+            {required ? (
+              <p className="text-sm font-medium text-foreground">
+                {label} <span className="text-destructive">*</span>
+              </p>
+            ) : (
+              <CheckboxField
+                checked={!!formData.attachmentChecklist[key]}
+                onChange={() => handleChecklistToggle('attachmentChecklist', key)}
+              >
+                {label}
+              </CheckboxField>
+            )}
+            {(required || formData.attachmentChecklist[key]) && (
               <div className="mt-3">
                 <FileUpload field={files} files={formData[files]} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} error={fieldErrors[files]} />
                 {fieldErrors[files] && (
@@ -513,9 +587,6 @@ function PublicationFundingForm({ user, onLogout }) {
             )}
           </div>
         ))}
-        {fieldErrors.irbApprovalFiles && (
-          <p className="text-xs font-medium text-destructive">{fieldErrors.irbApprovalFiles}</p>
-        )}
       </div>
     </div>
   );
@@ -561,10 +632,10 @@ function PublicationFundingForm({ user, onLogout }) {
         supporting documents submitted are valid. The applicant understands that funding is considered only after
         manuscript acceptance, reimbursement is subject to approval, and additional post-publication requirements may apply.
       </div>
-      <Field label="Applicant name" required error={fieldErrors.applicantDeclarationName}>
+      <Field label="Applicant name" required hint="Auto-filled from your account (editable)" error={fieldErrors.applicantDeclarationName}>
         <Input value={formData.applicantDeclarationName} onChange={(e) => handleChange('applicantDeclarationName', e.target.value)} />
       </Field>
-      <Field label="Date" required error={fieldErrors.applicantDeclarationDate}>
+      <Field label="Date" required hint="Auto-filled with the submission date (editable)" error={fieldErrors.applicantDeclarationDate}>
         <Input type="date" value={formData.applicantDeclarationDate} onChange={(e) => handleChange('applicantDeclarationDate', e.target.value)} />
       </Field>
     </div>

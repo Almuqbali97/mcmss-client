@@ -375,9 +375,13 @@ function Dashboard({ user, onLogout }) {
         <section className="space-y-4">
           <h3 className="text-lg font-semibold text-foreground">My applications</h3>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
-            <TabsList>
+            <TabsList className="h-auto border border-border bg-card p-1">
               {FORM_TYPES.map((form) => (
-                <TabsTrigger key={form.id} value={form.id}>
+                <TabsTrigger
+                  key={form.id}
+                  value={form.id}
+                  className="px-4 py-1.5 text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                >
                   {form.id === 'ethics' ? 'Ethics' : 'Publication Funding'} ({counts[form.id]})
                 </TabsTrigger>
               ))}

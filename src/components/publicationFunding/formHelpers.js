@@ -100,6 +100,7 @@ export function getStepErrors(step, formData) {
         req('irbApprovalNumber', formData.irbApprovalNumber?.trim());
         req('approvingInstitution', formData.approvingInstitution?.trim());
         req('ethicsApprovalDate', formData.ethicsApprovalDate);
+        req('irbApprovalFiles', (formData.irbApprovalFiles || []).length > 0, 'Upload the IRB / ethics approval letter.');
       }
       if (formData.priorEthicalApproval === 'No') {
         req('ethicsNotRequiredReason', formData.ethicsNotRequiredReason);
@@ -120,13 +121,10 @@ export function getStepErrors(step, formData) {
       req('dateOfPayment', formData.dateOfPayment);
       break;
     case 7: // Attachments
-      for (const { key, files, label } of ATTACHMENT_ITEMS) {
-        if (formData.attachmentChecklist?.[key]) {
+      for (const { key, files, label, required } of ATTACHMENT_ITEMS) {
+        if (required || formData.attachmentChecklist?.[key]) {
           req(files, (formData[files] || []).length > 0, `Upload a file for "${label}".`);
         }
-      }
-      if (formData.priorEthicalApproval === 'Yes') {
-        req('irbApprovalFiles', (formData.irbApprovalFiles || []).length > 0, 'Upload the IRB / ethics approval letter.');
       }
       break;
     case 8: // Eligibility

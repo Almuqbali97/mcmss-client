@@ -192,6 +192,7 @@ function ViewPublicationFunding({ user, onLogout }) {
         <InfoRow label="Approval date" value={fd.ethicsApprovalDate} />
         <InfoRow label="Reason if not required" value={fd.ethicsNotRequiredReason} />
         {fd.ethicsNotRequiredReason === 'Other' && <InfoRow label="Other reason" value={fd.ethicsNotRequiredOther} />}
+        <FileList label="IRB / ethics approval letter" files={fd.irbApprovalFiles} />
       </SectionCard>
 
       <SectionCard title="Section 6: Funding Request Details">
@@ -224,8 +225,8 @@ function ViewPublicationFunding({ user, onLogout }) {
       </SectionCard>
 
       <SectionCard title="Section 7: Required Attachments">
-        {ATTACHMENT_ITEMS.map(({ key, label, files }) =>
-          fd.attachmentChecklist?.[key] ? (
+        {ATTACHMENT_ITEMS.map(({ key, label, files, required }) =>
+          required || fd.attachmentChecklist?.[key] ? (
             <FileList key={key} label={label} files={fd[files]} />
           ) : null
         )}
