@@ -40,7 +40,7 @@ function ViewSubmission({ user, onLogout }) {
   const [fieldComments, setFieldComments] = useState({});
   const [savingComments, setSavingComments] = useState(false);
   const [commentsSaved, setCommentsSaved] = useState(false);
-  const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
+  const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [savingPiDecision, setSavingPiDecision] = useState(false);
@@ -53,8 +53,16 @@ function ViewSubmission({ user, onLogout }) {
   // they hold reviewer capability. The backend only serves this to submitter/assigned-reviewer/admin.
   const submitterId = submission?.submittedBy?._id || submission?.submittedBy?.id;
   const isSubmitter = !!submitterId && String(submitterId) === String(user?.id);
+  // Identify the assigned reviewer by matching their reviewer-record email to the logged-in
+  // user, rather than the global `isReviewer` flag which can be stale in an existing session
+  // (it is only refreshed on the next login after the admin grants reviewer capability).
+  // The backend only serves this submission to the submitter, assigned reviewer, or admin.
+  const assignedReviewerEmail = submission?.assignedReviewerId?.email;
   const isAssignedReviewer =
-    !!user?.isReviewer && !isAdmin && !isSubmitter && !!submission?.assignedReviewerId;
+    !isAdmin &&
+    !isSubmitter &&
+    !!assignedReviewerEmail &&
+    assignedReviewerEmail.toLowerCase() === String(user?.email || '').toLowerCase();
   // The PI must have approved before a reviewer can act; admins may override.
   const reviewUnlocked =
     submission?.status === 'under_review' && (isAdmin || piDeclarationApproved);
@@ -94,6 +102,17 @@ function ViewSubmission({ user, onLogout }) {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const handleSaveFieldComments = async () => {
     setSavingComments(true);
     setCommentsSaved(false);
@@ -117,7 +136,7 @@ function ViewSubmission({ user, onLogout }) {
       // Persist the per-section comments first so they are saved with the review and
       // show under their respective sections afterwards (no need to re-enter them below).
       await updateFieldComments(id, fieldComments);
-      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments, reviewDecision.deadlineOption);
+      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments);
       setSubmission(updated);
       navigate(getDefaultRouteForRole(user.role));
     } catch (error) {
@@ -486,11 +505,45 @@ function ViewSubmission({ user, onLogout }) {
           <FileList label="Research Proposal Files" files={formData.researchProposalFiles} />
         </SectionCard>
 
-        {submission.reviewComments && (
-          <SectionCard title="Review Comments">
-            <p className="whitespace-pre-wrap text-muted-foreground">{submission.reviewComments}</p>
-          </SectionCard>
-        )}
+        {(() => {
+          // Prefer the dated history. Fall back to the legacy single-string field for
+          // submissions reviewed before the tracker existed.
+          const history =
+            submission.reviewCommentHistory?.length > 0
+              ? submission.reviewCommentHistory
+              : submission.reviewComments
+                ? [{ comment: submission.reviewComments, decision: submission.reviewStatus }]
+                : [];
+          if (history.length === 0) return null;
+          return (
+            <SectionCard title="Reviewer Comments">
+              <div className="space-y-3">
+                {history.map((entry, index) => (
+                  <div
+                    key={entry._id || index}
+                    className="rounded-md border border-info/30 bg-info-muted/40 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                      <span className="text-xs font-medium text-foreground">
+                        {entry.createdAt ? formatDateTime(entry.createdAt) : 'Date not recorded'}
+                        {entry.round ? ` · Revision round ${entry.round}` : ''}
+                      </span>
+                      {entry.decision && (
+                        <StatusBadge status={entry.decision} className="text-xs" />
+                      )}
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {entry.comment}
+                    </p>
+                    {entry.author && (
+                      <p className="mt-1 text-xs text-muted-foreground/80">— {entry.author}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          );
+        })()}
 
         {isAssignedReviewer && submission?.status === 'under_review' && !reviewUnlocked && (
           <Alert>
@@ -531,31 +584,15 @@ function ViewSubmission({ user, onLogout }) {
                     </SelectContent>
                   </Select>
                 </div>
-                {REVISION_STATUSES.includes(reviewDecision.status) &&
-                  (submission?.revision?.round || 0) >= 1 && (
-                    <div className="space-y-2">
-                      <Label htmlFor="reviewDeadline">Revision deadline</Label>
-                      <Select
-                        value={reviewDecision.deadlineOption}
-                        onValueChange={(v) => setReviewDecision((prev) => ({ ...prev, deadlineOption: v }))}
-                      >
-                        <SelectTrigger id="reviewDeadline" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1_week">1 week</SelectItem>
-                          <SelectItem value="2_weeks">2 weeks</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Second revision. Researcher must resubmit within this window or the form is cancelled.
-                      </p>
-                    </div>
-                  )}
-                {REVISION_STATUSES.includes(reviewDecision.status) &&
-                  (submission?.revision?.round || 0) === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      First revision: the researcher is given <strong>30 days</strong> to resubmit before the form is cancelled.
-                    </p>
-                  )}
+                {REVISION_STATUSES.includes(reviewDecision.status) && (
+                  <p className="text-xs text-muted-foreground">
+                    {(submission?.revision?.round || 0) >= 1 ? (
+                      <>Second revision: the researcher is given <strong>7 days</strong> to resubmit before the form is cancelled.</>
+                    ) : (
+                      <>First revision: the researcher is given <strong>30 days</strong> to resubmit before the form is cancelled.</>
+                    )}
+                  </p>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="reviewComments">Overall review comments (optional)</Label>
                   <Textarea

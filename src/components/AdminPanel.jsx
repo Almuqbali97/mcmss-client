@@ -16,7 +16,6 @@ import {
 import {
   getSubmissions,
   assignReviewer,
-  submitReview,
   getReviewers,
   getReviewerCandidates,
   createReviewer,
@@ -24,7 +23,6 @@ import {
   deleteReviewer,
   exportSubmission,
   getPublicationFundingApplications,
-  submitPublicationFundingReview,
   exportPublicationFunding,
   getAdminUsers,
   getNotificationSettings,
@@ -32,11 +30,10 @@ import {
 } from '../utils/api';
 import UserMenu from './UserMenu';
 import ThemeToggle from './ThemeToggle';
-import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
+import { StatusBadge } from './StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -63,7 +60,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
+import { cn, formatRemaining, remainingTone } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { id: 'applications', label: 'All Applications', Icon: ClipboardList },
@@ -74,13 +71,6 @@ const NAV_ITEMS = [
 ];
 
 const NO_RECIPIENT = 'none';
-
-// Publication funding keeps its original three-way decision set.
-const PUBLICATION_DECISIONS = [
-  { value: 'approved', label: 'Approve' },
-  { value: 'revisions_required', label: 'Revisions Required' },
-  { value: 'rejected', label: 'Reject' },
-];
 
 function StatCard({ value, label }) {
   return (
@@ -119,8 +109,6 @@ function AdminPanel({ user, onLogout }) {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [selectedApplicationType, setSelectedApplicationType] = useState('ethics');
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewData, setReviewData] = useState({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterYear, setFilterYear] = useState('');
@@ -195,28 +183,6 @@ function AdminPanel({ user, onLogout }) {
     }
   };
 
-  const handleSubmitReview = async () => {
-    if (!reviewData.comments.trim()) {
-      toast.error('Please provide review comments.');
-      return;
-    }
-
-    try {
-      const id = selectedSubmission._id || selectedSubmission.id;
-      if (selectedApplicationType === 'publication') {
-        await submitPublicationFundingReview(id, reviewData.status, reviewData.comments);
-      } else {
-        await submitReview(id, reviewData.status, reviewData.comments, reviewData.deadlineOption);
-      }
-      await loadData();
-      setShowReviewModal(false);
-      setSelectedSubmission(null);
-      setReviewData({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
-      toast.success('Review submitted successfully!');
-    } catch {
-      toast.error('Failed to submit review. Please try again.');
-    }
-  };
 
   const handleExport = async (submissionId, type = 'ethics') => {
     try {
@@ -397,12 +363,6 @@ function AdminPanel({ user, onLogout }) {
     setShowAssignModal(true);
   };
 
-  const openReviewModal = (item, type) => {
-    setSelectedApplicationType(type);
-    setSelectedSubmission(item);
-    setReviewData({ status: 'approved', comments: '', deadlineOption: '2_weeks' });
-    setShowReviewModal(true);
-  };
 
   const renderApplicationRows = () =>
     activeList.map((item) => {
@@ -439,34 +399,23 @@ function AdminPanel({ user, onLogout }) {
           </TableCell>
           <TableCell>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
-                View
+              <Button variant="plum" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
+                Review
               </Button>
-              {isPublicationTab
-                ? item.status === 'under_review' && (
-                    <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
-                      Review
+              {!isPublicationTab && (
+                <>
+                  {item.status === 'under_review' && !item.assignedReviewer && (
+                    <Button size="sm" onClick={() => openAssignModal(item, type)}>
+                      Assign
                     </Button>
-                  )
-                : (
-                  <>
-                    {item.status === 'under_review' && !item.assignedReviewer && (
-                      <Button size="sm" onClick={() => openAssignModal(item, type)}>
-                        Assign
-                      </Button>
-                    )}
-                    {item.status === 'under_review' && item.assignedReviewer && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
-                          Change reviewer
-                        </Button>
-                        <Button size="sm" variant="plum" onClick={() => openReviewModal(item, type)}>
-                          Review
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
+                  )}
+                  {item.status === 'under_review' && item.assignedReviewer && (
+                    <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
+                      Change reviewer
+                    </Button>
+                  )}
+                </>
+              )}
               <Button variant="ghost" size="icon" title="Export" onClick={() => handleExport(id, type)}>
                 <Download />
               </Button>
@@ -947,73 +896,6 @@ function AdminPanel({ user, onLogout }) {
         </DialogContent>
       </Dialog>
 
-      {/* Review Modal */}
-      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit Review</DialogTitle>
-            <DialogDescription>
-              {selectedApplicationType === 'publication' ? 'Manuscript' : 'Research'}:{' '}
-              {selectedApplicationType === 'publication'
-                ? selectedSubmission?.manuscriptTitle
-                : selectedSubmission?.researchTitle}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Review Status *</Label>
-              <Select value={reviewData.status} onValueChange={(v) => setReviewData({ ...reviewData, status: v })}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(selectedApplicationType === 'publication' ? PUBLICATION_DECISIONS : REVIEW_DECISIONS).map((d) => (
-                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedApplicationType !== 'publication' &&
-              REVISION_STATUSES.includes(reviewData.status) &&
-              (selectedSubmission?.revision?.round || 0) >= 1 && (
-                <div className="space-y-2">
-                  <Label>Revision Deadline *</Label>
-                  <Select
-                    value={reviewData.deadlineOption}
-                    onValueChange={(v) => setReviewData({ ...reviewData, deadlineOption: v })}
-                  >
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1_week">1 week</SelectItem>
-                      <SelectItem value="2_weeks">2 weeks</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Second revision. The researcher must resubmit within this window or the form is cancelled.
-                  </p>
-                </div>
-              )}
-            {selectedApplicationType !== 'publication' &&
-              REVISION_STATUSES.includes(reviewData.status) &&
-              (selectedSubmission?.revision?.round || 0) === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  First revision: the researcher is given <strong>30 days</strong> to resubmit before the form is cancelled.
-                </p>
-              )}
-            <div className="space-y-2">
-              <Label>Review Comments *</Label>
-              <Textarea
-                value={reviewData.comments}
-                onChange={(e) => setReviewData({ ...reviewData, comments: e.target.value })}
-                rows={6}
-                placeholder="Enter your review comments and feedback..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setShowReviewModal(false)}>Cancel</Button>
-            <Button onClick={handleSubmitReview}>Submit Review</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add Reviewer Modal */}
       <Dialog open={showAddReviewerModal} onOpenChange={setShowAddReviewerModal}>

@@ -1015,7 +1015,7 @@ function SubmissionForm({ user, onLogout }) {
           <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
             <strong className="text-foreground">The Information Sheet must conclude with the statement:</strong> "The Medical City For Military and Security Services Research Committee has reviewed and approved this project."
           </div>
-          <Field label="Please upload the information sheet" required hint="Please upload both the English and Arabic versions (maximum 2 files)." error={fieldErrors.informationSheetFiles}>
+          <Field label="Please upload the information sheet in Arabic and English" required hint="Please upload both the English and Arabic versions (maximum 2 files)." error={fieldErrors.informationSheetFiles}>
             <FileUpload field="informationSheetFiles" files={formData.informationSheetFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={2} error={fieldErrors.informationSheetFiles} />
           </Field>
 

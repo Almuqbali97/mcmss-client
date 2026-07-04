@@ -244,8 +244,8 @@ export const assignReviewer = async (id, reviewerId) => {
   return getData(response);
 };
 
-export const submitReview = async (id, status, comments, revisionDeadlineOption) => {
-  const response = await api.post(`/submissions/${id}/review`, { status, comments, revisionDeadlineOption });
+export const submitReview = async (id, status, comments) => {
+  const response = await api.post(`/submissions/${id}/review`, { status, comments });
   return getData(response);
 };
 
