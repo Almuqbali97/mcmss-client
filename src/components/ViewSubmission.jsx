@@ -21,12 +21,17 @@ import {
 
 const SECTION7_FIELDS = [
   { key: 'introduction', label: 'Introduction' },
+  { key: 'rationaleForStudy', label: 'Rationale for study' },
+  { key: 'studyDesignSettingDuration', legacyKey: 'methodology', label: 'Study design, setting and duration' },
   { key: 'objectives', label: 'Objectives' },
-  { key: 'targetPopulation', label: 'Target Population' },
-  { key: 'methodology', label: 'Methodology' },
-  { key: 'statisticalAnalysis', label: 'Statistical Analysis' },
-  { key: 'intervention', label: 'Intervention' },
-  { key: 'expectedOutcomes', label: 'Expected Outcomes' },
+  { key: 'studyPopulationAndSampling', legacyKey: 'targetPopulation', label: 'Study population and sampling' },
+  { key: 'sampleSize', label: 'Sample size' },
+  { key: 'variables', label: 'Variables' },
+  { key: 'intervention', label: 'Intervention (if applicable)' },
+  { key: 'statisticalAnalysis', label: 'Statistical analysis' },
+  { key: 'informedConsentProcess', label: 'Process of obtaining informed consent (if applicable)' },
+  { key: 'expectedOutcomes', label: 'Expected outcomes' },
+  { key: 'additionalComments', label: 'Additional comments (optional)' },
   { key: 'references', label: 'References' },
 ];
 
@@ -68,7 +73,10 @@ function ViewSubmission({ user, onLogout }) {
     submission?.status === 'under_review' && (isAdmin || piDeclarationApproved);
   const canComment = (isAssignedReviewer || isAdmin) && reviewUnlocked;
   const canSubmitReview = (isAssignedReviewer || isAdmin) && reviewUnlocked;
-  const canEdit = user?.role === 'researcher' && EDITABLE_STATUSES.includes(submission?.status);
+  const canEdit = user?.role === 'researcher' && (
+    EDITABLE_STATUSES.includes(submission?.status) ||
+    (submission?.status === 'under_review' && !submission?.adminViewedAt)
+  );
 
   useEffect(() => {
     loadSubmission();
@@ -471,28 +479,31 @@ function ViewSubmission({ user, onLogout }) {
         </SectionCard>
 
         <SectionCard title="Section 7: Research Proposal">
-          {SECTION7_FIELDS.map(({ key, label }) => (
+          {SECTION7_FIELDS.map(({ key, legacyKey, label }) => {
+            const comment = fieldComments[key] ?? (legacyKey ? fieldComments[legacyKey] : '');
+            return (
             <div key={key} className="space-y-2 border-b border-border pb-4 last:border-0 last:pb-0">
-              <InfoRow full label={label} value={formData[key]} />
+              <InfoRow full label={label} value={formData[key] ?? (legacyKey ? formData[legacyKey] : '')} />
               {canComment && (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Your comment on {label}</Label>
                   <Textarea
-                    value={fieldComments[key] || ''}
+                    value={comment || ''}
                     onChange={(e) => setFieldComments((prev) => ({ ...prev, [key]: e.target.value }))}
                     placeholder={`Add comment for ${label}...`}
                     rows={2}
                   />
                 </div>
               )}
-              {!canComment && fieldComments[key] && (
+              {!canComment && comment && (
                 <div className="rounded-md border border-info/30 bg-info-muted/40 p-3 text-sm">
                   <span className="font-medium text-foreground">Reviewer comment:</span>
-                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{fieldComments[key]}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{comment}</p>
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
           {canComment && (
             <div className="flex justify-end pt-2">
               <Button onClick={handleSaveFieldComments} disabled={savingComments}>
@@ -500,9 +511,6 @@ function ViewSubmission({ user, onLogout }) {
               </Button>
             </div>
           )}
-          <FileList label="Sample Size Calculation Files" files={formData.sampleSizeFiles} />
-          <FileList label="Data & Research Variables Files" files={formData.dataVariablesFiles} />
-          <FileList label="Research Proposal Files" files={formData.researchProposalFiles} />
         </SectionCard>
 
         {(() => {

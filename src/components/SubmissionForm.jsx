@@ -138,12 +138,17 @@ const SUBMISSION_FIELD_LABELS = {
   piSignature: 'Signature',
   declarationDate: 'Declaration date',
   introduction: 'Introduction',
+  rationaleForStudy: 'Rationale for study',
+  studyDesignSettingDuration: 'Study design, setting and duration',
   objectives: 'Objectives',
-  targetPopulation: 'Target population',
-  methodology: 'Methodology',
+  studyPopulationAndSampling: 'Study population and sampling',
+  sampleSize: 'Sample size',
+  variables: 'Variables',
   statisticalAnalysis: 'Statistical analysis',
   intervention: 'Intervention',
+  informedConsentProcess: 'Process of obtaining informed consent',
   expectedOutcomes: 'Expected outcomes',
+  additionalComments: 'Additional comments',
   references: 'References',
 };
 
@@ -267,16 +272,18 @@ function SubmissionForm({ user, onLogout }) {
     piSignature: '',
     declarationDate: '',
     introduction: '',
+    rationaleForStudy: '',
+    studyDesignSettingDuration: '',
     objectives: '',
-    targetPopulation: '',
-    methodology: '',
-    sampleSizeFiles: [],
-    statisticalAnalysis: '',
+    studyPopulationAndSampling: '',
+    sampleSize: '',
+    variables: '',
     intervention: '',
-    dataVariablesFiles: [],
+    statisticalAnalysis: '',
+    informedConsentProcess: '',
     expectedOutcomes: '',
+    additionalComments: '',
     references: '',
-    researchProposalFiles: [],
   });
 
   useEffect(() => {
@@ -313,6 +320,15 @@ function SubmissionForm({ user, onLogout }) {
             publishPersonalInfoFromOtherSourceDetails:
               savedData.publishPersonalInfoFromOtherSourceDetails ?? '',
             deceptionDebriefingProcedures: savedData.deceptionDebriefingProcedures ?? '',
+            rationaleForStudy: savedData.rationaleForStudy ?? '',
+            studyDesignSettingDuration:
+              savedData.studyDesignSettingDuration ?? savedData.methodology ?? '',
+            studyPopulationAndSampling:
+              savedData.studyPopulationAndSampling ?? savedData.targetPopulation ?? '',
+            sampleSize: savedData.sampleSize ?? '',
+            variables: savedData.variables ?? '',
+            informedConsentProcess: savedData.informedConsentProcess ?? '',
+            additionalComments: savedData.additionalComments ?? '',
           }));
         } catch (error) {
           console.error('Failed to load auto-saved data:', error);
@@ -354,6 +370,11 @@ function SubmissionForm({ user, onLogout }) {
     try {
       const submission = await getSubmission(id);
       setSubmissionStatus(submission.status);
+      if (submission.status === 'under_review' && submission.adminViewedAt) {
+        toast.error('This submission can no longer be edited because an admin has viewed it.');
+        navigate(`/submission/${id}`, { replace: true });
+        return;
+      }
       if (submission.formData) {
         const fd = submission.formData;
         setFormData({
@@ -384,6 +405,14 @@ function SubmissionForm({ user, onLogout }) {
           publishPersonalInfoFromOtherSourceDetails:
             fd.publishPersonalInfoFromOtherSourceDetails ?? '',
           deceptionDebriefingProcedures: fd.deceptionDebriefingProcedures ?? '',
+          rationaleForStudy: fd.rationaleForStudy ?? '',
+          studyDesignSettingDuration: fd.studyDesignSettingDuration ?? fd.methodology ?? '',
+          studyPopulationAndSampling:
+            fd.studyPopulationAndSampling ?? fd.targetPopulation ?? '',
+          sampleSize: fd.sampleSize ?? '',
+          variables: fd.variables ?? '',
+          informedConsentProcess: fd.informedConsentProcess ?? '',
+          additionalComments: fd.additionalComments ?? '',
         });
       }
     } catch (error) {
@@ -433,6 +462,7 @@ function SubmissionForm({ user, onLogout }) {
   // On a revision, previously uploaded files must be kept for the record. Researchers
   // may add new files but cannot delete existing ones.
   const isRevision = REVISION_STATUSES.includes(submissionStatus);
+  const isAwaitingAdminView = submissionStatus === 'under_review';
 
   const FILE_LIMITS = { informationSheetFiles: 2 };
 
@@ -631,11 +661,13 @@ function SubmissionForm({ user, onLogout }) {
         if (formData.introduction?.trim() && countWords(formData.introduction) > 500) {
           e.introduction = 'Introduction must be 500 words or fewer.';
         }
+        req('rationaleForStudy', formData.rationaleForStudy?.trim());
+        req('studyDesignSettingDuration', formData.studyDesignSettingDuration?.trim());
         req('objectives', formData.objectives?.trim());
-        req('targetPopulation', formData.targetPopulation?.trim());
-        req('methodology', formData.methodology?.trim());
+        req('studyPopulationAndSampling', formData.studyPopulationAndSampling?.trim());
+        req('sampleSize', formData.sampleSize?.trim());
+        req('variables', formData.variables?.trim());
         req('statisticalAnalysis', formData.statisticalAnalysis?.trim());
-        req('intervention', formData.intervention?.trim());
         req('expectedOutcomes', formData.expectedOutcomes?.trim());
         req('references', formData.references?.trim());
         break;
@@ -725,17 +757,16 @@ function SubmissionForm({ user, onLogout }) {
         researchTitle: formData.researchTitle,
         principalInvestigator: formData.principalInvestigator?.fullName || formData.principalInvestigator || '',
         formData: formData,
-        status: 'draft',
       };
 
       if (id) {
         await updateSubmission(id, submissionData);
       } else {
-        const newSubmission = await createSubmission(submissionData);
+        const newSubmission = await createSubmission({ ...submissionData, status: 'draft' });
         clearAutoSave();
         navigate(`/submission/${newSubmission._id || newSubmission.id}/edit`);
       }
-      toast.success('Draft saved successfully!');
+      toast.success(isAwaitingAdminView ? 'Changes saved successfully!' : 'Draft saved successfully!');
     } catch {
       toast.error('Failed to save draft. Please try again.');
     } finally {
@@ -778,8 +809,10 @@ function SubmissionForm({ user, onLogout }) {
       };
 
       if (id) {
-        await updateSubmission(id, { ...submissionData, status: 'draft' });
-        await submitForReview(id);
+        await updateSubmission(id, submissionData);
+        if (!isAwaitingAdminView) {
+          await submitForReview(id);
+        }
       } else {
         const newSubmission = await createSubmission({ ...submissionData, status: 'draft' });
         await submitForReview(newSubmission._id || newSubmission.id);
@@ -790,6 +823,12 @@ function SubmissionForm({ user, onLogout }) {
       await new Promise((resolve) => setTimeout(resolve, remainingTime));
 
       clearAutoSave();
+      if (isAwaitingAdminView) {
+        setLoading(false);
+        toast.success('Your changes were saved.');
+        navigate(`/submission/${id}`);
+        return;
+      }
       setLoading(false);
       setShowSuccessView(true);
     } catch {
@@ -1329,35 +1368,41 @@ function SubmissionForm({ user, onLogout }) {
       <Field label="Introduction (Max 500 words)" required htmlFor="introduction" hint={`${countWords(formData.introduction)} / 500 words`} error={fieldErrors.introduction}>
         <Textarea id="introduction" rows={6} value={formData.introduction} onChange={(e) => handleChange('introduction', limitWords(e.target.value, 500))} placeholder="Provide an introduction to your research" />
       </Field>
+      <Field label="Rationale for study" required htmlFor="rationaleForStudy" error={fieldErrors.rationaleForStudy}>
+        <Textarea id="rationaleForStudy" rows={4} value={formData.rationaleForStudy} onChange={(e) => handleChange('rationaleForStudy', e.target.value)} placeholder="Explain the rationale for the study" />
+      </Field>
+      <Field label="Study design, setting and duration" required htmlFor="studyDesignSettingDuration" error={fieldErrors.studyDesignSettingDuration}>
+        <Textarea id="studyDesignSettingDuration" rows={5} value={formData.studyDesignSettingDuration} onChange={(e) => handleChange('studyDesignSettingDuration', e.target.value)} placeholder="Describe the study design, setting and duration" />
+      </Field>
       <Field label="Objectives (Primary & Secondary)" required htmlFor="objectives" error={fieldErrors.objectives}>
         <Textarea id="objectives" rows={4} value={formData.objectives} onChange={(e) => handleChange('objectives', e.target.value)} placeholder="List your primary and secondary objectives" />
       </Field>
-      <Field label="Target Population" required htmlFor="targetPopulation" error={fieldErrors.targetPopulation}>
-        <Textarea id="targetPopulation" rows={3} value={formData.targetPopulation} onChange={(e) => handleChange('targetPopulation', e.target.value)} placeholder="Describe your target population" />
+      <Field label="Study population and sampling" required htmlFor="studyPopulationAndSampling" error={fieldErrors.studyPopulationAndSampling}>
+        <Textarea id="studyPopulationAndSampling" rows={4} value={formData.studyPopulationAndSampling} onChange={(e) => handleChange('studyPopulationAndSampling', e.target.value)} placeholder="Describe the study population and sampling approach" />
       </Field>
-      <Field label="Methodology" required htmlFor="methodology" error={fieldErrors.methodology}>
-        <Textarea id="methodology" rows={6} value={formData.methodology} onChange={(e) => handleChange('methodology', e.target.value)} placeholder="Describe your research methodology" />
+      <Field label="Sample size" required htmlFor="sampleSize" error={fieldErrors.sampleSize}>
+        <Textarea id="sampleSize" rows={3} value={formData.sampleSize} onChange={(e) => handleChange('sampleSize', e.target.value)} placeholder="State and justify the sample size" />
       </Field>
-      <Field label="Sample Size Calculation" required>
-        <FileUpload field="sampleSizeFiles" files={formData.sampleSizeFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
+      <Field label="Variables" required htmlFor="variables" error={fieldErrors.variables}>
+        <Textarea id="variables" rows={4} value={formData.variables} onChange={(e) => handleChange('variables', e.target.value)} placeholder="List and describe the study variables" />
       </Field>
-      <Field label="Statistical Analysis" required htmlFor="statisticalAnalysis" error={fieldErrors.statisticalAnalysis}>
-        <Textarea id="statisticalAnalysis" rows={4} value={formData.statisticalAnalysis} onChange={(e) => handleChange('statisticalAnalysis', e.target.value)} placeholder="Describe your statistical analysis methods" />
-      </Field>
-      <Field label="Intervention" required htmlFor="intervention" error={fieldErrors.intervention}>
+      <Field label="Intervention (if applicable)" htmlFor="intervention" error={fieldErrors.intervention}>
         <Textarea id="intervention" rows={4} value={formData.intervention} onChange={(e) => handleChange('intervention', e.target.value)} placeholder="Describe any interventions" />
       </Field>
-      <Field label="Data and Research Variables">
-        <FileUpload field="dataVariablesFiles" files={formData.dataVariablesFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
+      <Field label="Statistical analysis" required htmlFor="statisticalAnalysis" error={fieldErrors.statisticalAnalysis}>
+        <Textarea id="statisticalAnalysis" rows={4} value={formData.statisticalAnalysis} onChange={(e) => handleChange('statisticalAnalysis', e.target.value)} placeholder="Describe your statistical analysis methods" />
       </Field>
-      <Field label="Expected Outcomes" required htmlFor="expectedOutcomes" error={fieldErrors.expectedOutcomes}>
+      <Field label="Process of obtaining informed consent (if applicable)" htmlFor="informedConsentProcess" error={fieldErrors.informedConsentProcess}>
+        <Textarea id="informedConsentProcess" rows={4} value={formData.informedConsentProcess} onChange={(e) => handleChange('informedConsentProcess', e.target.value)} placeholder="Describe how informed consent will be obtained" />
+      </Field>
+      <Field label="Expected outcomes" required htmlFor="expectedOutcomes" error={fieldErrors.expectedOutcomes}>
         <Textarea id="expectedOutcomes" rows={4} value={formData.expectedOutcomes} onChange={(e) => handleChange('expectedOutcomes', e.target.value)} placeholder="Describe expected outcomes" />
+      </Field>
+      <Field label="Additional comments (optional)" htmlFor="additionalComments" error={fieldErrors.additionalComments}>
+        <Textarea id="additionalComments" rows={4} value={formData.additionalComments} onChange={(e) => handleChange('additionalComments', e.target.value)} placeholder="Add any other relevant comments" />
       </Field>
       <Field label="References" required htmlFor="references" error={fieldErrors.references}>
         <Textarea id="references" rows={6} value={formData.references} onChange={(e) => handleChange('references', e.target.value)} placeholder="List your references" />
-      </Field>
-      <Field label="Upload Research Proposal" required>
-        <FileUpload field="researchProposalFiles" files={formData.researchProposalFiles} onAdd={handleFileChange} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" />
       </Field>
     </div>
   );
@@ -1427,7 +1472,7 @@ function SubmissionForm({ user, onLogout }) {
               <div className="flex gap-3">
                 <Button variant="outline" onClick={handleSave} disabled={saving}>
                   {saving ? <Loader2 className="animate-spin" /> : <Save />}
-                  {saving ? 'Saving...' : 'Save Draft'}
+                  {saving ? 'Saving...' : isAwaitingAdminView ? 'Save Changes' : 'Save Draft'}
                 </Button>
                 {currentStep < STEPS.length ? (
                   <Button onClick={handleNext}>
@@ -1437,7 +1482,7 @@ function SubmissionForm({ user, onLogout }) {
                 ) : (
                   <Button variant="plum" onClick={handleSubmit} disabled={loading}>
                     {loading && <Loader2 className="animate-spin" />}
-                    {loading ? 'Submitting...' : 'Submit for Review'}
+                    {loading ? (isAwaitingAdminView ? 'Saving...' : 'Submitting...') : (isAwaitingAdminView ? 'Save Changes' : 'Submit for Review')}
                   </Button>
                 )}
               </div>
@@ -1469,14 +1514,18 @@ function SubmissionForm({ user, onLogout }) {
       <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Submission</DialogTitle>
-            <DialogDescription>Are you sure you want to submit this form for review?</DialogDescription>
+            <DialogTitle>{isAwaitingAdminView ? 'Confirm Changes' : 'Confirm Submission'}</DialogTitle>
+            <DialogDescription>
+              {isAwaitingAdminView
+                ? 'Save these changes to your submitted form? You can continue editing until an admin views it.'
+                : 'Are you sure you want to submit this form for review?'}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>Cancel</Button>
             <Button onClick={confirmSubmit} disabled={loading}>
               {loading && <Loader2 className="animate-spin" />}
-              Confirm Submit
+              {isAwaitingAdminView ? 'Confirm Changes' : 'Confirm Submit'}
             </Button>
           </DialogFooter>
         </DialogContent>

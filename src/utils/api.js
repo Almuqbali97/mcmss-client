@@ -112,7 +112,7 @@ const buildSubmissionFormData = (data) => {
   const fd = new FormData();
   fd.append('researchTitle', data.researchTitle || '');
   fd.append('principalInvestigator', data.principalInvestigator || '');
-  fd.append('status', data.status || 'draft');
+  if (data.status !== undefined) fd.append('status', data.status);
   const formData = data.formData || data;
   const sanitized = { ...formData };
   const fileFields = [
@@ -120,9 +120,6 @@ const buildSubmissionFormData = (data) => {
     'consentFormFiles',
     'grantDocuments',
     'ethicsApprovalDocuments',
-    'sampleSizeFiles',
-    'dataVariablesFiles',
-    'researchProposalFiles',
     'bloodTissueAbroadDocuments',
   ];
   for (const field of fileFields) {
