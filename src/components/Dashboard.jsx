@@ -6,7 +6,6 @@ import {
   getSubmissions,
   getPublicationFundingApplications,
   getAssignedSubmissions,
-  deleteSubmission,
   deletePublicationFunding,
 } from '../utils/api';
 import AppHeader from './AppHeader';
@@ -105,13 +104,8 @@ function Dashboard({ user, onLogout }) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      if (deleteTarget.isPublication) {
-        await deletePublicationFunding(deleteTarget.id);
-        setPublicationApps((prev) => prev.filter((x) => (x._id || x.id) !== deleteTarget.id));
-      } else {
-        await deleteSubmission(deleteTarget.id);
-        setEthicsSubmissions((prev) => prev.filter((x) => (x._id || x.id) !== deleteTarget.id));
-      }
+      await deletePublicationFunding(deleteTarget.id);
+      setPublicationApps((prev) => prev.filter((x) => (x._id || x.id) !== deleteTarget.id));
       toast.success('Draft deleted.');
       setDeleteTarget(null);
     } catch (error) {
@@ -214,7 +208,7 @@ function Dashboard({ user, onLogout }) {
                         {REVISION_STATUSES.includes(item.status) ? 'Revise' : 'Edit'}
                       </Button>
                     )}
-                    {item.status === 'draft' && (
+                    {item.status === 'draft' && isPublication && (
                       <Button
                         variant="destructive"
                         size="sm"

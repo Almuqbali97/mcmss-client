@@ -236,6 +236,15 @@ export const deleteSubmission = async (id) => {
   await api.delete(`/submissions/${id}`);
 };
 
+export const getRecentlyDeletedSubmissions = async () => {
+  const response = await api.get('/submissions/recently-deleted');
+  return getData(response);
+};
+
+export const permanentlyDeleteSubmission = async (id) => {
+  await api.delete(`/submissions/recently-deleted/${id}`);
+};
+
 export const assignReviewer = async (id, reviewerId) => {
   const response = await api.post(`/submissions/${id}/assign-reviewer`, { reviewerId });
   return getData(response);
