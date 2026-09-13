@@ -132,6 +132,20 @@ const buildSubmissionFormData = (data) => {
       }
     }
   }
+  if (Array.isArray(sanitized.documentUploads)) {
+    sanitized.documentUploads = sanitized.documentUploads.map((upload) => {
+      const item = { ...upload };
+      for (const language of ['english', 'arabic']) {
+        const field = `${language}Files`;
+        const files = Array.isArray(item[field]) ? item[field] : [];
+        const newFiles = files.filter((file) => file instanceof File);
+        item[field] = files.filter((file) => !(file instanceof File));
+        item[`${language}HasNewFile`] = newFiles.length > 0;
+        for (const file of newFiles) fd.append(`documentUpload${language[0].toUpperCase()}${language.slice(1)}`, file);
+      }
+      return item;
+    });
+  }
   fd.append('formDataJson', JSON.stringify(sanitized));
   return fd;
 };
@@ -193,8 +207,11 @@ export const changePassword = async (currentPassword, newPassword) => {
   await api.post('/auth/change-password', { currentPassword, newPassword });
 };
 
-export const getSubmissions = async (status) => {
-  const response = await api.get('/submissions', status ? { params: { status } } : {});
+export const getSubmissions = async (status, markViewed = false) => {
+  const params = {};
+  if (status) params.status = status;
+  if (markViewed) params.markViewed = true;
+  const response = await api.get('/submissions', { params });
   return getData(response);
 };
 

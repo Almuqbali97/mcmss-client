@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, Loader2, Save, CheckCircle2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Save, CheckCircle2, Plus, Trash2, X } from 'lucide-react';
 import { createSubmission, updateSubmission, getSubmission, submitForReview } from '../utils/api';
 import AppHeader from './AppHeader';
 import {
@@ -42,6 +42,7 @@ const STEPS = [
   { id: 5, title: 'Ethical Considerations', section: 'section5' },
   { id: 6, title: 'Declaration', section: 'section6' },
   { id: 7, title: 'Research Proposal', section: 'section7' },
+  { id: 8, title: 'Document Uploads', section: 'section8' },
 ];
 
 const RESEARCH_TYPES = [
@@ -77,6 +78,14 @@ const STUDY_INVOLVES_OPTIONS = [
 ];
 
 const ETHICS_APPROVAL_MAX_FILE_BYTES = 100 * 1024 * 1024;
+const DOCUMENT_UPLOAD_TYPES = ['Survey', 'Questionnaire', 'Tools', 'Other'];
+const makeDocumentUpload = () => ({
+  type: '',
+  otherType: '',
+  languages: { english: false, arabic: false },
+  englishFiles: [],
+  arabicFiles: [],
+});
 
 const SUBMISSION_FIELD_LABELS = {
   researchTitle: 'Research Title',
@@ -284,6 +293,7 @@ function SubmissionForm({ user, onLogout }) {
     expectedOutcomes: '',
     additionalComments: '',
     references: '',
+    documentUploads: [],
   });
 
   useEffect(() => {
@@ -329,6 +339,15 @@ function SubmissionForm({ user, onLogout }) {
             variables: savedData.variables ?? '',
             informedConsentProcess: savedData.informedConsentProcess ?? '',
             additionalComments: savedData.additionalComments ?? '',
+            documentUploads: Array.isArray(savedData.documentUploads)
+              ? savedData.documentUploads.map((upload) => ({
+                  ...makeDocumentUpload(),
+                  ...upload,
+                  languages: { ...makeDocumentUpload().languages, ...upload.languages },
+                  englishFiles: Array.isArray(upload.englishFiles) ? upload.englishFiles : [],
+                  arabicFiles: Array.isArray(upload.arabicFiles) ? upload.arabicFiles : [],
+                }))
+              : [],
           }));
         } catch (error) {
           console.error('Failed to load auto-saved data:', error);
@@ -413,6 +432,15 @@ function SubmissionForm({ user, onLogout }) {
           variables: fd.variables ?? '',
           informedConsentProcess: fd.informedConsentProcess ?? '',
           additionalComments: fd.additionalComments ?? '',
+          documentUploads: Array.isArray(fd.documentUploads)
+            ? fd.documentUploads.map((upload) => ({
+                ...makeDocumentUpload(),
+                ...upload,
+                languages: { ...makeDocumentUpload().languages, ...upload.languages },
+                englishFiles: Array.isArray(upload.englishFiles) ? upload.englishFiles : [],
+                arabicFiles: Array.isArray(upload.arabicFiles) ? upload.arabicFiles : [],
+              }))
+            : [],
         });
       }
     } catch (error) {
@@ -502,6 +530,49 @@ function SubmissionForm({ user, onLogout }) {
       const existing = prev.ethicsApprovalDocuments || [];
       return { ...prev, ethicsApprovalDocuments: [...existing, ...valid].slice(0, 1) };
     });
+  };
+
+  const updateDocumentUpload = (index, updates) => {
+    setFormData((prev) => ({
+      ...prev,
+      documentUploads: (prev.documentUploads || []).map((upload, i) =>
+        i === index ? { ...upload, ...updates } : upload
+      ),
+    }));
+  };
+
+  const setDocumentLanguage = (index, language, checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      documentUploads: (prev.documentUploads || []).map((upload, i) =>
+        i === index
+          ? {
+              ...upload,
+              languages: { ...upload.languages, [language]: checked },
+              ...(checked ? {} : { [`${language}Files`]: [] }),
+            }
+          : upload
+      ),
+    }));
+  };
+
+  const handleDocumentUploadFiles = (index, language, files) => {
+    const selectedFiles = Array.from(files || []).slice(0, 1);
+    updateDocumentUpload(index, { [`${language}Files`]: selectedFiles });
+  };
+
+  const removeDocumentUploadFile = (index, language, fileIndex) => {
+    setFormData((prev) => ({
+      ...prev,
+      documentUploads: (prev.documentUploads || []).map((upload, i) => {
+        if (i !== index) return upload;
+        const field = `${language}Files`;
+        const files = upload[field] || [];
+        const target = files[fileIndex];
+        if (isRevision && target && !(target instanceof File)) return upload;
+        return { ...upload, [field]: files.filter((_, j) => j !== fileIndex) };
+      }),
+    }));
   };
 
   const updateCoInvestigator = (index, field, value) => {
@@ -767,8 +838,13 @@ function SubmissionForm({ user, onLogout }) {
         navigate(`/submission/${newSubmission._id || newSubmission.id}/edit`);
       }
       toast.success(isAwaitingAdminView ? 'Changes saved successfully!' : 'Draft saved successfully!');
-    } catch {
-      toast.error('Failed to save draft. Please try again.');
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          (isAwaitingAdminView
+            ? 'Failed to save changes. Please try again.'
+            : 'Failed to save draft. Please try again.')
+      );
     } finally {
       setSaving(false);
     }
@@ -831,8 +907,13 @@ function SubmissionForm({ user, onLogout }) {
       }
       setLoading(false);
       setShowSuccessView(true);
-    } catch {
-      toast.error('Failed to submit. Please try again.');
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          (isAwaitingAdminView
+            ? 'Failed to save changes. Please try again.'
+            : 'Failed to submit. Please try again.')
+      );
       setLoading(false);
     }
   };
@@ -1407,6 +1488,72 @@ function SubmissionForm({ user, onLogout }) {
     </div>
   );
 
+  const renderStep8 = () => (
+    <div className="space-y-5">
+      <StepHeading title="Document Uploads" description="Add surveys, questionnaires, tools, or other supporting documents. Select the available language version(s) for each document." />
+
+      {(formData.documentUploads || []).map((upload, index) => (
+        <div key={index} className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium text-foreground">Document {index + 1}</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setFormData((prev) => ({ ...prev, documentUploads: prev.documentUploads.filter((_, i) => i !== index) }))}
+              aria-label={`Remove document ${index + 1}`}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+
+          <Field label="Document type">
+            <Select value={upload.type} onValueChange={(type) => updateDocumentUpload(index, { type, otherType: type === 'Other' ? upload.otherType : '' })}>
+              <SelectTrigger><SelectValue placeholder="Select document type" /></SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_UPLOAD_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {upload.type === 'Other' && (
+            <Field label="Specify document type">
+              <Input value={upload.otherType} onChange={(e) => updateDocumentUpload(index, { otherType: e.target.value })} placeholder="Enter document type" />
+            </Field>
+          )}
+
+          {upload.type && (
+            <>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Document language</p>
+                <div className="flex flex-wrap gap-4">
+                  <CheckboxField checked={upload.languages?.english} onChange={(checked) => setDocumentLanguage(index, 'english', checked)}>English</CheckboxField>
+                  <CheckboxField checked={upload.languages?.arabic} onChange={(checked) => setDocumentLanguage(index, 'arabic', checked)}>Arabic</CheckboxField>
+                </div>
+              </div>
+
+              {upload.languages?.english && (
+                <Field label="Upload English document">
+                  <FileUpload field={`document-upload-${index}-english`} files={upload.englishFiles} onAdd={(_, files) => handleDocumentUploadFiles(index, 'english', files)} onRemove={(_, fileIndex) => removeDocumentUploadFile(index, 'english', fileIndex)} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} />
+                </Field>
+              )}
+              {upload.languages?.arabic && (
+                <Field label="Upload Arabic document">
+                  <FileUpload field={`document-upload-${index}-arabic`} files={upload.arabicFiles} onAdd={(_, files) => handleDocumentUploadFiles(index, 'arabic', files)} onRemove={(_, fileIndex) => removeDocumentUploadFile(index, 'arabic', fileIndex)} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} />
+                </Field>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+
+      <Button type="button" variant="outline" onClick={() => setFormData((prev) => ({ ...prev, documentUploads: [...(prev.documentUploads || []), makeDocumentUpload()] }))}>
+        <Plus />
+        Add
+      </Button>
+    </div>
+  );
+
   const STEP_RENDERERS = {
     1: renderStep1,
     2: renderStep2,
@@ -1415,6 +1562,7 @@ function SubmissionForm({ user, onLogout }) {
     5: renderStep5,
     6: renderStep6,
     7: renderStep7,
+    8: renderStep8,
   };
 
   if (showSuccessView) {

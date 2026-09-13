@@ -133,6 +133,15 @@ function AdminPanel({ user, onLogout }) {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (loading || activeSection !== 'applications' || applicationTab !== 'ethics') return;
+
+    // Reaching the visible ethics applications list closes the submitter's edit window.
+    getSubmissions(undefined, true)
+      .then(setSubmissions)
+      .catch((error) => console.error('Failed to mark ethics submissions as viewed:', error));
+  }, [activeSection, applicationTab, loading]);
+
   const loadData = async () => {
     try {
       const [subsData, pubData, revsData, candData, adminsData, settingsData] = await Promise.all([
