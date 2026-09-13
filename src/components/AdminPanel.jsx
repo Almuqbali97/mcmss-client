@@ -12,6 +12,8 @@ import {
   Plus,
   Search,
   Download,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import {
   getSubmissions,
@@ -27,6 +29,9 @@ import {
   getAdminUsers,
   getNotificationSettings,
   updateNotificationSettings,
+  deleteSubmission,
+  getRecentlyDeletedSubmissions,
+  permanentlyDeleteSubmission,
 } from '../utils/api';
 import UserMenu from './UserMenu';
 import ThemeToggle from './ThemeToggle';
@@ -64,6 +69,7 @@ import { cn, formatRemaining, remainingTone } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { id: 'applications', label: 'All Applications', Icon: ClipboardList },
+  { id: 'recently-deleted', label: 'Recently Deleted', Icon: Trash2 },
   { id: 'users', label: 'Users', Icon: Users },
   { id: 'administration', label: 'Administration', Icon: Settings },
   { id: 'settings', label: 'Settings', Icon: Bell },
@@ -95,13 +101,14 @@ function ComingSoon({ title, description, detail }) {
   );
 }
 
-const VALID_SECTIONS = ['applications', 'users', 'administration', 'settings', 'reports'];
+const VALID_SECTIONS = ['applications', 'recently-deleted', 'users', 'administration', 'settings', 'reports'];
 
 function AdminPanel({ user, onLogout }) {
   const navigate = useNavigate();
   const { section } = useParams();
   const activeSection = VALID_SECTIONS.includes(section) ? section : 'applications';
   const [submissions, setSubmissions] = useState([]);
+  const [recentlyDeleted, setRecentlyDeleted] = useState([]);
   const [publicationApps, setPublicationApps] = useState([]);
   const [applicationTab, setApplicationTab] = useState('ethics');
   const [reviewers, setReviewers] = useState([]);
@@ -128,6 +135,9 @@ function AdminPanel({ user, onLogout }) {
   const [adminUsers, setAdminUsers] = useState([]);
   const [notificationRecipientId, setNotificationRecipientId] = useState(NO_RECIPIENT);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [submissionToDelete, setSubmissionToDelete] = useState(null);
+  const [submissionToPermanentlyDelete, setSubmissionToPermanentlyDelete] = useState(null);
+  const [deletingSubmission, setDeletingSubmission] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -144,8 +154,9 @@ function AdminPanel({ user, onLogout }) {
 
   const loadData = async () => {
     try {
-      const [subsData, pubData, revsData, candData, adminsData, settingsData] = await Promise.all([
+      const [subsData, deletedData, pubData, revsData, candData, adminsData, settingsData] = await Promise.all([
         getSubmissions(),
+        getRecentlyDeletedSubmissions(),
         getPublicationFundingApplications(),
         getReviewers(),
         getReviewerCandidates().catch(() => []),
@@ -153,6 +164,7 @@ function AdminPanel({ user, onLogout }) {
         getNotificationSettings().catch(() => null),
       ]);
       setSubmissions(subsData);
+      setRecentlyDeleted(deletedData || []);
       setPublicationApps(pubData);
       setReviewers(revsData);
       setReviewerCandidates(candData || []);
@@ -189,6 +201,44 @@ function AdminPanel({ user, onLogout }) {
       toast.success('Reviewer assigned successfully!');
     } catch {
       toast.error('Failed to assign reviewer. Please try again.');
+    }
+  };
+
+  const confirmDeleteSubmission = async () => {
+    if (!submissionToDelete) return;
+    setDeletingSubmission(true);
+    try {
+      await deleteSubmission(submissionToDelete._id || submissionToDelete.id);
+      await loadData();
+      setSubmissionToDelete(null);
+      toast.success('Submission moved to Recently Deleted.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete submission.');
+    } finally {
+      setDeletingSubmission(false);
+    }
+  };
+
+  const confirmPermanentDeleteSubmission = async () => {
+    if (!submissionToPermanentlyDelete) return;
+    setDeletingSubmission(true);
+    try {
+      await permanentlyDeleteSubmission(
+        submissionToPermanentlyDelete._id || submissionToPermanentlyDelete.id
+      );
+      setRecentlyDeleted((items) =>
+        items.filter(
+          (item) =>
+            (item._id || item.id) !==
+            (submissionToPermanentlyDelete._id || submissionToPermanentlyDelete.id)
+        )
+      );
+      setSubmissionToPermanentlyDelete(null);
+      toast.success('Submission permanently deleted.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to permanently delete submission.');
+    } finally {
+      setDeletingSubmission(false);
     }
   };
 
@@ -428,6 +478,17 @@ function AdminPanel({ user, onLogout }) {
               <Button variant="ghost" size="icon" title="Export" onClick={() => handleExport(id, type)}>
                 <Download />
               </Button>
+              {!isPublicationTab && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  title="Delete submission"
+                  onClick={() => setSubmissionToDelete(item)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
             </div>
           </TableCell>
         </TableRow>
@@ -600,6 +661,80 @@ function AdminPanel({ user, onLogout }) {
                   </TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+    </div>
+  );
+
+  const renderRecentlyDeletedView = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">Recently Deleted</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Deleted submissions are kept for 30 days, then permanently deleted automatically.
+        </p>
+      </div>
+
+      <Card className="overflow-hidden py-0">
+        {loading ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">Loading deleted submissions...</div>
+        ) : recentlyDeleted.length === 0 ? (
+          <div className="p-14 text-center">
+            <h3 className="text-base font-semibold text-foreground">Recently Deleted is empty</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Deleted submissions will appear here for 30 days.</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Research Title</TableHead>
+                <TableHead>Principal Investigator</TableHead>
+                <TableHead>Deleted</TableHead>
+                <TableHead>Permanent deletion</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recentlyDeleted.map((submission) => {
+                const id = submission._id || submission.id;
+                const daysLeft = Math.max(
+                  0,
+                  Math.ceil((new Date(submission.deleteAfter) - new Date()) / (1000 * 60 * 60 * 24))
+                );
+                return (
+                  <TableRow key={id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {submission.submissionId}
+                    </TableCell>
+                    <TableCell className="max-w-xs font-medium whitespace-normal">
+                      {submission.researchTitle || 'Untitled Research'}
+                    </TableCell>
+                    <TableCell>{submission.principalInvestigator || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(submission.deletedAt)}</TableCell>
+                    <TableCell>
+                      <div>{formatDate(submission.deleteAfter)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {daysLeft === 0 ? 'Less than 1 day remaining' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setSubmissionToPermanentlyDelete(submission)}
+                        >
+                          <Trash2 />
+                          Delete permanently
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -814,6 +949,7 @@ function AdminPanel({ user, onLogout }) {
 
         <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
           {activeSection === 'applications' && renderApplicationsView()}
+          {activeSection === 'recently-deleted' && renderRecentlyDeletedView()}
           {activeSection === 'users' && (
             <ComingSoon
               title="Users Management"
@@ -900,6 +1036,69 @@ function AdminPanel({ user, onLogout }) {
               onClick={() => handleAssignReviewer(selectedSubmission._id || selectedSubmission.id, selectedAssignReviewerId)}
             >
               Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Submission Confirmation */}
+      <Dialog
+        open={!!submissionToDelete}
+        onOpenChange={(open) => !open && !deletingSubmission && setSubmissionToDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete submission?</DialogTitle>
+            <DialogDescription>
+              Delete <span className="font-medium text-foreground">{submissionToDelete?.researchTitle}</span>?
+              It will move to Recently Deleted for 30 days before being permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setSubmissionToDelete(null)} disabled={deletingSubmission}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSubmission} disabled={deletingSubmission}>
+              {deletingSubmission ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permanent Delete Confirmation */}
+      <Dialog
+        open={!!submissionToPermanentlyDelete}
+        onOpenChange={(open) =>
+          !open && !deletingSubmission && setSubmissionToPermanentlyDelete(null)
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permanently delete submission?</DialogTitle>
+            <DialogDescription>
+              Permanently delete{' '}
+              <span className="font-medium text-foreground">
+                {submissionToPermanentlyDelete?.researchTitle}
+              </span>
+              ? The submission and its uploaded files cannot be recovered.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setSubmissionToPermanentlyDelete(null)}
+              disabled={deletingSubmission}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmPermanentDeleteSubmission}
+              disabled={deletingSubmission}
+            >
+              {deletingSubmission ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              Delete permanently
             </Button>
           </DialogFooter>
         </DialogContent>
