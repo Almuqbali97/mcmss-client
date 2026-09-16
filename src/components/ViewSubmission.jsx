@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSubmission, updateFieldComments, submitReview, setPiDeclaration, uploadApprovalCertificate } from '../utils/api';
+import { getSubmission, updateFieldComments, submitReview, setPiDeclaration, uploadApprovalCertificate, extendRevisionDeadline } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AppHeader from './AppHeader';
 import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
@@ -9,6 +9,7 @@ import { SectionCard, InfoRow, InfoGrid, FileList } from './view/ViewPrimitives'
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -51,6 +52,9 @@ function ViewSubmission({ user, onLogout }) {
   const [savingPiDecision, setSavingPiDecision] = useState(false);
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState('');
+  const [extensionDeadline, setExtensionDeadline] = useState('');
+  const [extendingDeadline, setExtendingDeadline] = useState(false);
+  const [extensionError, setExtensionError] = useState('');
 
   const isAdmin = user?.role === 'admin';
   const piDeclarationApproved = submission?.piDeclarationApproval?.status === 'approved';
@@ -184,6 +188,22 @@ function ViewSubmission({ user, onLogout }) {
     }
   };
 
+  const handleExtendDeadline = async (event) => {
+    event.preventDefault();
+    if (!extensionDeadline) return;
+    setExtensionError('');
+    setExtendingDeadline(true);
+    try {
+      const updated = await extendRevisionDeadline(id, new Date(extensionDeadline).toISOString());
+      setSubmission(updated);
+      setExtensionDeadline('');
+    } catch (error) {
+      setExtensionError(error.response?.data?.message || 'Failed to extend the revision deadline.');
+    } finally {
+      setExtendingDeadline(false);
+    }
+  };
+
   const backPath = getDefaultRouteForRole(user?.role);
 
   const shell = (children) => (
@@ -252,6 +272,35 @@ function ViewSubmission({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+
+        {isAdmin && REVISION_STATUSES.includes(submission.status) && submission.revision?.deadline && (
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="text-base">Extend Revision Deadline</CardTitle>
+              <CardDescription>
+                Current deadline: {formatDateTime(submission.revision.deadline)}. The new deadline must be later than this date.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={handleExtendDeadline} className="flex flex-wrap items-end gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="extensionDeadline">New deadline</Label>
+                  <Input
+                    id="extensionDeadline"
+                    type="datetime-local"
+                    value={extensionDeadline}
+                    onChange={(event) => setExtensionDeadline(event.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={extendingDeadline}>
+                  {extendingDeadline ? 'Extending...' : 'Extend Deadline'}
+                </Button>
+              </form>
+              {extensionError && <p className="mt-3 text-sm text-destructive">{extensionError}</p>}
+            </CardContent>
+          </Card>
+        )}
 
         {submission.status === 'approved' && (
           <SectionCard title="Letter of Approval">
@@ -512,6 +561,32 @@ function ViewSubmission({ user, onLogout }) {
             </div>
           )}
         </SectionCard>
+
+        {formData.documentUploads?.length > 0 && (
+          <SectionCard title="Section 8: Document Uploads">
+            {formData.documentUploads.map((document, index) => (
+              <div key={index} className="space-y-3 rounded-md border border-border p-3">
+                <InfoRow
+                  label={`Document ${index + 1} type`}
+                  value={document.type === 'Other' ? document.otherType || 'Other' : document.type}
+                />
+                <InfoRow
+                  label="Language"
+                  value={[
+                    document.languages?.english && 'English',
+                    document.languages?.arabic && 'Arabic',
+                  ].filter(Boolean).join(', ')}
+                />
+                {document.languages?.english && (
+                  <FileList label="English document" files={document.englishFiles} />
+                )}
+                {document.languages?.arabic && (
+                  <FileList label="Arabic document" files={document.arabicFiles} />
+                )}
+              </div>
+            ))}
+          </SectionCard>
+        )}
 
         {(() => {
           // Prefer the dated history. Fall back to the legacy single-string field for

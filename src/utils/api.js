@@ -272,6 +272,11 @@ export const submitReview = async (id, status, comments) => {
   return getData(response);
 };
 
+export const extendRevisionDeadline = async (id, deadline) => {
+  const response = await api.patch(`/submissions/${id}/revision-deadline`, { deadline });
+  return getData(response);
+};
+
 export const setPiDeclaration = async (id, decision) => {
   const response = await api.post(`/submissions/${id}/pi-declaration`, { decision });
   return getData(response);
