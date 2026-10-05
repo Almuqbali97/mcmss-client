@@ -747,6 +747,23 @@ function ViewSubmission({ user, onLogout }) {
             </CardContent>
           </Card>
         )}
+        {isAdmin && underReview && submission.reviewDraft?.state === 'draft' && submission.reviewDraft?.status && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Reviewer draft</CardTitle>
+              <CardDescription>
+                Decision: {REVIEW_DECISIONS.find((decision) => decision.value === submission.reviewDraft.status)?.label}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm font-medium">Overall comments</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {submission.reviewDraft.comments || 'No overall comment saved.'}
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground">Section comments appear beside the proposal fields in Section 7.</p>
+            </CardContent>
+          </Card>
+        )}
         {underReview && submission.reviewDraft?.state === 'issued' && (isAdmin || isAssignedReviewer) && (
           <Card>
             <CardHeader>
