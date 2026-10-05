@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getSubmission, updateFieldComments, submitReview, setPiDeclaration, uploadApprovalCertificate, extendRevisionDeadline } from '../utils/api';
+import { getSubmission, updateFieldComments, saveReviewDraft, issueReview, approveReview, unsubmitReview, setPiDeclaration, uploadApprovalCertificate, extendRevisionDeadline } from '../utils/api';
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AppHeader from './AppHeader';
 import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
@@ -49,6 +49,7 @@ function ViewSubmission({ user, onLogout }) {
   const [reviewDecision, setReviewDecision] = useState({ status: 'approved', comments: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [reviewNotice, setReviewNotice] = useState('');
   const [savingPiDecision, setSavingPiDecision] = useState(false);
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
   const [certificateError, setCertificateError] = useState('');
@@ -73,10 +74,10 @@ function ViewSubmission({ user, onLogout }) {
     !!assignedReviewerEmail &&
     assignedReviewerEmail.toLowerCase() === String(user?.email || '').toLowerCase();
   // The PI must have approved before a reviewer can act; admins may override.
-  const reviewUnlocked =
-    submission?.status === 'under_review' && (isAdmin || piDeclarationApproved);
-  const canComment = (isAssignedReviewer || isAdmin) && reviewUnlocked;
-  const canSubmitReview = (isAssignedReviewer || isAdmin) && reviewUnlocked;
+  const underReview = ['under_review', 'under_review_with_revisions'].includes(submission?.status);
+  const reviewUnlocked = underReview && piDeclarationApproved && submission?.reviewDraft?.state !== 'issued';
+  const canComment = isAssignedReviewer && reviewUnlocked;
+  const canSubmitReview = isAssignedReviewer && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && (
     EDITABLE_STATUSES.includes(submission?.status) ||
     (submission?.status === 'under_review' && !submission?.adminViewedAt)
@@ -88,16 +89,19 @@ function ViewSubmission({ user, onLogout }) {
 
   useEffect(() => {
     if (submission?.fieldComments) {
-      setFieldComments(submission.fieldComments);
+      setFieldComments((isAdmin || isAssignedReviewer) && underReview
+        ? submission.reviewDraft?.fieldComments || {}
+        : submission.fieldComments);
     } else {
       setFieldComments({});
     }
-  }, [submission?.fieldComments]);
+  }, [submission?.fieldComments, submission?.reviewDraft?.fieldComments, isAdmin, isAssignedReviewer, underReview]);
 
   const loadSubmission = async () => {
     try {
       const data = await getSubmission(id);
       setSubmission(data);
+      setReviewDecision({ status: data.reviewDraft?.status || 'approved', comments: data.reviewDraft?.comments || '' });
     } catch (error) {
       console.error('Failed to load submission:', error);
     } finally {
@@ -140,19 +144,33 @@ function ViewSubmission({ user, onLogout }) {
     }
   };
 
-  const handleSubmitReview = async (e) => {
-    e.preventDefault();
+  const handleSaveReview = async (issue = false) => {
     setReviewError('');
+    setReviewNotice('');
     setSubmittingReview(true);
     try {
-      // Persist the per-section comments first so they are saved with the review and
-      // show under their respective sections afterwards (no need to re-enter them below).
       await updateFieldComments(id, fieldComments);
-      const updated = await submitReview(id, reviewDecision.status, reviewDecision.comments);
+      let updated = await saveReviewDraft(id, reviewDecision.status, reviewDecision.comments);
+      if (issue) updated = await issueReview(id);
       setSubmission(updated);
-      navigate(getDefaultRouteForRole(user.role));
+      setReviewNotice(issue ? 'Review issued to the admin for approval.' : 'Review draft saved.');
     } catch (error) {
-      setReviewError(error.response?.data?.message || 'Failed to submit review. Please try again.');
+      setReviewError(error.response?.data?.message || 'Failed to save review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleAdminReviewAction = async (action) => {
+    setReviewError('');
+    setReviewNotice('');
+    setSubmittingReview(true);
+    try {
+      const updated = action === 'approve' ? await approveReview(id) : await unsubmitReview(id);
+      setSubmission(updated);
+      setReviewNotice(action === 'approve' ? 'Review approved and shared with the researcher.' : 'Review returned to the reviewer for editing.');
+    } catch (error) {
+      setReviewError(error.response?.data?.message || 'Review action failed. Please try again.');
     } finally {
       setSubmittingReview(false);
     }
@@ -618,7 +636,7 @@ function ViewSubmission({ user, onLogout }) {
                     <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
                       {entry.comment}
                     </p>
-                    {entry.author && (
+                    {!isSubmitter && entry.author && (
                       <p className="mt-1 text-xs text-muted-foreground/80">— {entry.author}</p>
                     )}
                   </div>
@@ -628,7 +646,7 @@ function ViewSubmission({ user, onLogout }) {
           );
         })()}
 
-        {isAssignedReviewer && submission?.status === 'under_review' && !reviewUnlocked && (
+        {isAssignedReviewer && underReview && !piDeclarationApproved && (
           <Alert>
             <AlertDescription>
               {`Review is locked until the Principal Investigator approves the Declaration${
@@ -643,19 +661,20 @@ function ViewSubmission({ user, onLogout }) {
         {canSubmitReview && (
           <Card>
             <CardHeader className="border-b">
-              <CardTitle className="text-base">Submit Review Decision</CardTitle>
+              <CardTitle className="text-base">Review Decision</CardTitle>
               <CardDescription>
                 Add your comments per section in Section 7 above — they are saved with your review and
                 shown under each section. The overall summary below is optional.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
-              <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div className="space-y-4">
                 {reviewError && (
                   <Alert variant="destructive">
                     <AlertDescription>{reviewError}</AlertDescription>
                   </Alert>
                 )}
+                {reviewNotice && <p className="text-sm text-green-700">{reviewNotice}</p>}
                 <div className="space-y-2">
                   <Label htmlFor="reviewStatus">Decision</Label>
                   <Select value={reviewDecision.status} onValueChange={(v) => setReviewDecision((prev) => ({ ...prev, status: v }))}>
@@ -687,12 +706,31 @@ function ViewSubmission({ user, onLogout }) {
                   />
                 </div>
                 <div className="flex justify-end gap-3">
-                  <Button type="button" variant="outline" onClick={() => navigate(backPath)}>Cancel</Button>
-                  <Button type="submit" disabled={submittingReview}>
-                    {submittingReview ? 'Submitting...' : 'Submit Review'}
+                  <Button type="button" variant="outline" onClick={() => handleSaveReview(false)} disabled={submittingReview}>
+                    {submittingReview ? 'Saving...' : 'Save review'}
+                  </Button>
+                  <Button type="button" onClick={() => handleSaveReview(true)} disabled={submittingReview}>
+                    {submittingReview ? 'Issuing...' : 'Issue review'}
                   </Button>
                 </div>
-              </form>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {underReview && submission.reviewDraft?.state === 'issued' && (isAdmin || isAssignedReviewer) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Issued review awaiting admin approval</CardTitle>
+              <CardDescription>Decision: {REVIEW_DECISIONS.find((d) => d.value === submission.reviewDraft.status)?.label}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {submission.reviewDraft.comments && <p className="whitespace-pre-wrap text-sm">{submission.reviewDraft.comments}</p>}
+              {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+              {reviewNotice && <p className="text-sm text-green-700">{reviewNotice}</p>}
+              {isAdmin && <div className="flex gap-2">
+                <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
+                <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
+              </div>}
             </CardContent>
           </Card>
         )}

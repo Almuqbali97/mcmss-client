@@ -389,8 +389,8 @@ function SubmissionForm({ user, onLogout }) {
     try {
       const submission = await getSubmission(id);
       setSubmissionStatus(submission.status);
-      if (submission.status === 'under_review' && submission.adminViewedAt) {
-        toast.error('This submission can no longer be edited because an admin has viewed it.');
+      if (submission.status === 'under_review_with_revisions' || (submission.status === 'under_review' && submission.adminViewedAt)) {
+        toast.error('This submission is under review and cannot be edited.');
         navigate(`/submission/${id}`, { replace: true });
         return;
       }

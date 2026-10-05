@@ -267,8 +267,23 @@ export const assignReviewer = async (id, reviewerId) => {
   return getData(response);
 };
 
-export const submitReview = async (id, status, comments) => {
-  const response = await api.post(`/submissions/${id}/review`, { status, comments });
+export const saveReviewDraft = async (id, status, comments) => {
+  const response = await api.put(`/submissions/${id}/review-draft`, { status, comments });
+  return getData(response);
+};
+
+export const issueReview = async (id) => {
+  const response = await api.post(`/submissions/${id}/issue-review`);
+  return getData(response);
+};
+
+export const approveReview = async (id) => {
+  const response = await api.post(`/submissions/${id}/approve-review`);
+  return getData(response);
+};
+
+export const unsubmitReview = async (id) => {
+  const response = await api.post(`/submissions/${id}/unsubmit-review`);
   return getData(response);
 };
 

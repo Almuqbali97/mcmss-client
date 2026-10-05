@@ -350,7 +350,8 @@ function AdminPanel({ user, onLogout }) {
   const computeStats = (items) => ({
     total: items.length,
     draft: items.filter((s) => s.status === 'draft').length,
-    under_review: items.filter((s) => s.status === 'under_review').length,
+    under_review: items.filter((s) => s.status === 'under_review' && !(s.revision?.round > 0)).length,
+    under_review_with_revisions: items.filter((s) => s.status === 'under_review_with_revisions' || (s.status === 'under_review' && s.revision?.round > 0)).length,
     approved: items.filter((s) => s.status === 'approved').length,
     revisions_required: items.filter((s) =>
       ['revisions_required', 'conditional_minor', 'major_revisions'].includes(s.status)
@@ -377,7 +378,11 @@ function AdminPanel({ user, onLogout }) {
 
   const filteredSubmissions = (filterStatus === 'all'
     ? submissions
-    : submissions.filter((s) => s.status === filterStatus))
+    : submissions.filter((s) => filterStatus === 'under_review_with_revisions'
+      ? s.status === filterStatus || (s.status === 'under_review' && s.revision?.round > 0)
+      : filterStatus === 'under_review'
+        ? s.status === 'under_review' && !(s.revision?.round > 0)
+        : s.status === filterStatus))
     .filter((s) => s.status !== 'draft')
     .filter((s) => {
       if (searchQuery) {
@@ -440,6 +445,9 @@ function AdminPanel({ user, onLogout }) {
           <TableCell>{person}</TableCell>
           <TableCell>
             <StatusBadge submission={isPublicationTab ? undefined : item} status={item.status} />
+            {!isPublicationTab && item.reviewDraft?.state === 'issued' && (
+              <div className="mt-1 text-xs font-medium text-primary">Review awaiting admin approval</div>
+            )}
             {!isPublicationTab && item.revision?.deadline && (
               <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
                 {formatRemaining(item.revision.deadline)}
@@ -463,12 +471,12 @@ function AdminPanel({ user, onLogout }) {
               </Button>
               {!isPublicationTab && (
                 <>
-                  {item.status === 'under_review' && !item.assignedReviewer && (
+                  {['under_review', 'under_review_with_revisions'].includes(item.status) && !item.assignedReviewer && (
                     <Button size="sm" onClick={() => openAssignModal(item, type)}>
                       Assign
                     </Button>
                   )}
-                  {item.status === 'under_review' && item.assignedReviewer && (
+                  {['under_review', 'under_review_with_revisions'].includes(item.status) && item.assignedReviewer && (
                     <Button size="sm" variant="outline" onClick={() => openAssignModal(item, type)}>
                       Change reviewer
                     </Button>
@@ -504,9 +512,10 @@ function AdminPanel({ user, onLogout }) {
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard value={activeStats.total - activeStats.draft} label={isPublicationTab ? 'Total Applications' : 'Total Submissions'} />
         <StatCard value={activeStats.under_review} label="Under Review" />
+        {!isPublicationTab && <StatCard value={activeStats.under_review_with_revisions} label="Under Review with Revisions" />}
         <StatCard value={activeStats.approved} label="Approved" />
         <StatCard value={activeStats.revisions_required} label="Revisions Required" />
         <StatCard value={activeStats.rejected} label="Rejected" />
@@ -534,6 +543,7 @@ function AdminPanel({ user, onLogout }) {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
+                  {!isPublicationTab && <SelectItem value="under_review_with_revisions">Under Review with Revisions</SelectItem>}
                   <SelectItem value="approved">Approved</SelectItem>
                   {!isPublicationTab && <SelectItem value="conditional_minor">Conditional — Minor Revisions</SelectItem>}
                   {!isPublicationTab && <SelectItem value="major_revisions">Major Revisions</SelectItem>}

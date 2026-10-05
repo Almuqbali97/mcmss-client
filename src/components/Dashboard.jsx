@@ -313,7 +313,10 @@ function Dashboard({ user, onLogout }) {
                     <div className="text-xs text-muted-foreground">{item.submissionId || `#${id}`}</div>
                   </TableCell>
                   <TableCell>{getInvestigatorName(item)}</TableCell>
-                  <TableCell><StatusBadge submission={item} status={item.status} /></TableCell>
+                  <TableCell>
+                    <StatusBadge submission={item} status={item.status} />
+                    {item.reviewDraft?.state === 'issued' && <div className="mt-1 text-xs text-muted-foreground">Awaiting admin approval</div>}
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       <Button size="sm" onClick={() => navigate(`/submission/${id}`)}>

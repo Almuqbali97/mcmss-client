@@ -5,6 +5,7 @@ const STATUS_VARIANTS = {
   submitted: 'info',
   incomplete_submission: 'warning',
   under_review: 'info',
+  under_review_with_revisions: 'info',
   in_review: 'info',
   pending: 'warning',
   revisions_required: 'warning',
@@ -25,6 +26,7 @@ const STATUS_LABELS = {
   conditional_minor: 'Conditional Approval — Minor Revisions',
   major_revisions: 'Major Revisions',
   under_review: 'Under Review',
+  under_review_with_revisions: 'Under Review with Revisions',
   incomplete_submission: 'Incomplete Submission',
   archived: 'Cancelled (Archived)',
 };
@@ -45,7 +47,8 @@ export function deriveSubmissionStatus(submission) {
   const supStatus = submission.supervisorApproval?.status;
   const supIncomplete = supRequired && !!supStatus && supStatus !== 'approved';
 
-  return piIncomplete || supIncomplete ? 'incomplete_submission' : status;
+  if (piIncomplete || supIncomplete) return 'incomplete_submission';
+  return submission.revision?.round > 0 ? 'under_review_with_revisions' : status;
 }
 
 export const REVIEW_DECISIONS = [
