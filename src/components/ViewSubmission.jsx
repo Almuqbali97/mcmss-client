@@ -75,6 +75,11 @@ function ViewSubmission({ user, onLogout }) {
     assignedReviewerEmail.toLowerCase() === String(user?.email || '').toLowerCase();
   // The PI must have approved before a reviewer can act; admins may override.
   const underReview = ['under_review', 'under_review_with_revisions'].includes(submission?.status);
+  const canRetrieveReview = isAdmin && !!submission?.assignedReviewerId &&
+    ['approved', 'rejected', ...REVISION_STATUSES].includes(submission?.status) &&
+    submission?.reviewStatus === submission?.status &&
+    (submission?.reviewDraft?.state === 'released' ||
+      (submission?.reviewDraft?.state === 'draft' && !submission?.reviewDraft?.status));
   const reviewUnlocked = underReview && piDeclarationApproved && submission?.reviewDraft?.state !== 'issued';
   const canComment = isAssignedReviewer && reviewUnlocked;
   const canSubmitReview = isAssignedReviewer && reviewUnlocked;
@@ -168,7 +173,11 @@ function ViewSubmission({ user, onLogout }) {
     try {
       const updated = action === 'approve' ? await approveReview(id) : await unsubmitReview(id);
       setSubmission(updated);
-      setReviewNotice(action === 'approve' ? 'Review approved and shared with the researcher.' : 'Review returned to the reviewer for editing.');
+      setReviewNotice(action === 'approve'
+        ? 'Review approved and shared with the researcher.'
+        : action === 'retrieve'
+          ? 'Released review retrieved. It is hidden from the researcher and editable by the reviewer.'
+          : 'Review returned to the reviewer for editing.');
     } catch (error) {
       setReviewError(error.response?.data?.message || 'Review action failed. Please try again.');
     } finally {
@@ -290,6 +299,27 @@ function ViewSubmission({ user, onLogout }) {
             </div>
           </CardContent>
         </Card>
+
+        {isAdmin && reviewNotice && (
+          <Alert><AlertDescription>{reviewNotice}</AlertDescription></Alert>
+        )}
+
+        {canRetrieveReview && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Retrieve released review</CardTitle>
+              <CardDescription>
+                Hide this review and its comments from the researcher, and return the saved decision and comments to the reviewer for editing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={() => handleAdminReviewAction('retrieve')} disabled={submittingReview}>
+                {submittingReview ? 'Retrieving...' : 'Retrieve review'}
+              </Button>
+              {reviewError && <p className="mt-2 text-sm text-destructive">{reviewError}</p>}
+            </CardContent>
+          </Card>
+        )}
 
         {isAdmin && REVISION_STATUSES.includes(submission.status) && submission.revision?.deadline && (
           <Card>
@@ -726,7 +756,6 @@ function ViewSubmission({ user, onLogout }) {
             <CardContent className="space-y-3">
               {submission.reviewDraft.comments && <p className="whitespace-pre-wrap text-sm">{submission.reviewDraft.comments}</p>}
               {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
-              {reviewNotice && <p className="text-sm text-green-700">{reviewNotice}</p>}
               {isAdmin && <div className="flex gap-2">
                 <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
                 <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
