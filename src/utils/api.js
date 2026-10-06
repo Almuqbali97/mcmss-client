@@ -268,7 +268,8 @@ export const assignReviewer = async (id, reviewerId) => {
 };
 
 export const saveReviewDraft = async (id, status, comments) => {
-  const response = await api.put(`/submissions/${id}/review-draft`, { status, comments });
+  const payload = status ? { status, comments } : { comments };
+  const response = await api.put(`/submissions/${id}/review-draft`, payload);
   return getData(response);
 };
 

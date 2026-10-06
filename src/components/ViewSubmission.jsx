@@ -81,8 +81,8 @@ function ViewSubmission({ user, onLogout }) {
     (submission?.reviewDraft?.state === 'released' ||
       (submission?.reviewDraft?.state === 'draft' && !submission?.reviewDraft?.status));
   const reviewUnlocked = underReview && piDeclarationApproved && submission?.reviewDraft?.state !== 'issued';
-  const adminCanEditComments = isAdmin && underReview && !!submission?.reviewDraft?.status &&
-    ['draft', 'issued'].includes(submission?.reviewDraft?.state);
+  const adminCanEditComments = isAdmin && underReview &&
+    ['draft', 'issued'].includes(submission?.reviewDraft?.state || 'draft');
   const canComment = (isAssignedReviewer && reviewUnlocked) || adminCanEditComments;
   const canSubmitReview = isAssignedReviewer && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && (
@@ -158,7 +158,7 @@ function ViewSubmission({ user, onLogout }) {
     setSubmittingReview(true);
     try {
       await updateFieldComments(id, fieldComments);
-      const updated = await saveReviewDraft(id, submission.reviewDraft.status, reviewDecision.comments);
+      const updated = await saveReviewDraft(id, submission.reviewDraft?.status, reviewDecision.comments);
       setSubmission(updated);
       setReviewNotice('Review comments saved.');
     } catch (error) {
@@ -780,10 +780,14 @@ function ViewSubmission({ user, onLogout }) {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                {submission.reviewDraft.state === 'issued' ? 'Issued review awaiting admin approval' : 'Reviewer draft'}
+                {submission.reviewDraft?.state === 'issued'
+                  ? 'Issued review awaiting admin approval'
+                  : submission.reviewDraft?.status ? 'Reviewer draft' : 'Admin comments'}
               </CardTitle>
               <CardDescription>
-                Decision: {REVIEW_DECISIONS.find((decision) => decision.value === submission.reviewDraft.status)?.label}
+                {submission.reviewDraft?.status
+                  ? `Decision: ${REVIEW_DECISIONS.find((decision) => decision.value === submission.reviewDraft.status)?.label}`
+                  : 'No reviewer decision has been saved yet. Your comments remain private until a review is approved.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -801,7 +805,7 @@ function ViewSubmission({ user, onLogout }) {
                 <Button variant="outline" onClick={handleAdminSaveComments} disabled={submittingReview}>
                   {submittingReview ? 'Saving...' : 'Save comments'}
                 </Button>
-                {submission.reviewDraft.state === 'issued' && <>
+                {submission.reviewDraft?.state === 'issued' && <>
                   <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
                   <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
                 </>}
