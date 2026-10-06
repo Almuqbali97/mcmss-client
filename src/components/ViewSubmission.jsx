@@ -81,7 +81,9 @@ function ViewSubmission({ user, onLogout }) {
     (submission?.reviewDraft?.state === 'released' ||
       (submission?.reviewDraft?.state === 'draft' && !submission?.reviewDraft?.status));
   const reviewUnlocked = underReview && piDeclarationApproved && submission?.reviewDraft?.state !== 'issued';
-  const canComment = isAssignedReviewer && reviewUnlocked;
+  const adminCanEditComments = isAdmin && underReview && !!submission?.reviewDraft?.status &&
+    ['draft', 'issued'].includes(submission?.reviewDraft?.state);
+  const canComment = (isAssignedReviewer && reviewUnlocked) || adminCanEditComments;
   const canSubmitReview = isAssignedReviewer && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && (
     EDITABLE_STATUSES.includes(submission?.status) ||
@@ -137,15 +139,32 @@ function ViewSubmission({ user, onLogout }) {
   const handleSaveFieldComments = async () => {
     setSavingComments(true);
     setCommentsSaved(false);
+    setReviewError('');
     try {
       const updated = await updateFieldComments(id, fieldComments);
       setSubmission(updated);
       setCommentsSaved(true);
       setTimeout(() => setCommentsSaved(false), 3000);
     } catch (error) {
-      console.error('Failed to save field comments:', error);
+      setReviewError(error.response?.data?.message || 'Failed to save field comments.');
     } finally {
       setSavingComments(false);
+    }
+  };
+
+  const handleAdminSaveComments = async () => {
+    setReviewError('');
+    setReviewNotice('');
+    setSubmittingReview(true);
+    try {
+      await updateFieldComments(id, fieldComments);
+      const updated = await saveReviewDraft(id, submission.reviewDraft.status, reviewDecision.comments);
+      setSubmission(updated);
+      setReviewNotice('Review comments saved.');
+    } catch (error) {
+      setReviewError(error.response?.data?.message || 'Failed to save review comments.');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -171,8 +190,15 @@ function ViewSubmission({ user, onLogout }) {
     setReviewNotice('');
     setSubmittingReview(true);
     try {
+      if (action === 'approve' || action === 'unsubmit') {
+        await updateFieldComments(id, fieldComments);
+        await saveReviewDraft(id, submission.reviewDraft.status, reviewDecision.comments);
+      }
       const updated = action === 'approve' ? await approveReview(id) : await unsubmitReview(id);
       setSubmission(updated);
+      if (updated.reviewDraft?.status) {
+        setReviewDecision({ status: updated.reviewDraft.status, comments: updated.reviewDraft.comments || '' });
+      }
       setReviewNotice(action === 'approve'
         ? 'Review approved and shared with the researcher.'
         : action === 'retrieve'
@@ -583,7 +609,7 @@ function ViewSubmission({ user, onLogout }) {
               <InfoRow full label={label} value={formData[key] ?? (legacyKey ? formData[legacyKey] : '')} />
               {canComment && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Your comment on {label}</Label>
+                  <Label className="text-xs">Review comment on {label}</Label>
                   <Textarea
                     value={comment || ''}
                     onChange={(e) => setFieldComments((prev) => ({ ...prev, [key]: e.target.value }))}
@@ -602,10 +628,13 @@ function ViewSubmission({ user, onLogout }) {
             );
           })}
           {canComment && (
-            <div className="flex justify-end pt-2">
+            <div className="space-y-2 pt-2">
+              {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+              <div className="flex justify-end">
               <Button onClick={handleSaveFieldComments} disabled={savingComments}>
                 {savingComments ? 'Saving...' : commentsSaved ? 'Saved' : 'Save field comments'}
               </Button>
+              </div>
             </div>
           )}
         </SectionCard>
@@ -747,24 +776,40 @@ function ViewSubmission({ user, onLogout }) {
             </CardContent>
           </Card>
         )}
-        {isAdmin && underReview && submission.reviewDraft?.state === 'draft' && submission.reviewDraft?.status && (
+        {adminCanEditComments && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Reviewer draft</CardTitle>
+              <CardTitle className="text-base">
+                {submission.reviewDraft.state === 'issued' ? 'Issued review awaiting admin approval' : 'Reviewer draft'}
+              </CardTitle>
               <CardDescription>
                 Decision: {REVIEW_DECISIONS.find((decision) => decision.value === submission.reviewDraft.status)?.label}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm font-medium">Overall comments</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                {submission.reviewDraft.comments || 'No overall comment saved.'}
-              </p>
-              <p className="mt-3 text-xs text-muted-foreground">Section comments appear beside the proposal fields in Section 7.</p>
+            <CardContent className="space-y-3">
+              <Label htmlFor="adminReviewComments">Overall comments</Label>
+              <Textarea
+                id="adminReviewComments"
+                rows={5}
+                value={reviewDecision.comments}
+                onChange={(event) => setReviewDecision((previous) => ({ ...previous, comments: event.target.value }))}
+                placeholder="Overall review comments"
+              />
+              <p className="text-xs text-muted-foreground">Section comments can be edited beside the proposal fields in Section 7.</p>
+              {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={handleAdminSaveComments} disabled={submittingReview}>
+                  {submittingReview ? 'Saving...' : 'Save comments'}
+                </Button>
+                {submission.reviewDraft.state === 'issued' && <>
+                  <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
+                  <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
+                </>}
+              </div>
             </CardContent>
           </Card>
         )}
-        {underReview && submission.reviewDraft?.state === 'issued' && (isAdmin || isAssignedReviewer) && (
+        {underReview && submission.reviewDraft?.state === 'issued' && isAssignedReviewer && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Issued review awaiting admin approval</CardTitle>
@@ -773,10 +818,6 @@ function ViewSubmission({ user, onLogout }) {
             <CardContent className="space-y-3">
               {submission.reviewDraft.comments && <p className="whitespace-pre-wrap text-sm">{submission.reviewDraft.comments}</p>}
               {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
-              {isAdmin && <div className="flex gap-2">
-                <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
-                <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
-              </div>}
             </CardContent>
           </Card>
         )}
