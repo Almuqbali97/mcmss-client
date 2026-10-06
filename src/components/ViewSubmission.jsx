@@ -97,7 +97,7 @@ function ViewSubmission({ user, onLogout }) {
   useEffect(() => {
     if (submission?.fieldComments) {
       setFieldComments((isAdmin || isAssignedReviewer) && underReview
-        ? submission.reviewDraft?.fieldComments || {}
+        ? { ...submission.fieldComments, ...submission.reviewDraft?.fieldComments }
         : submission.fieldComments);
     } else {
       setFieldComments({});
