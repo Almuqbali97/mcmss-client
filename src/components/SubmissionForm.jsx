@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, ArrowRight, Loader2, Save, CheckCircle2, Plus, Trash2, X } from 'lucide-react';
 import { createSubmission, updateSubmission, getSubmission, submitForReview } from '../utils/api';
+import { isUploadedFile, restoreSubmissionFiles } from '../utils/submissionFiles';
 import AppHeader from './AppHeader';
 import {
   Field,
@@ -164,6 +165,7 @@ const SUBMISSION_FIELD_LABELS = {
 const describeSubmissionErrorKey = (key) => {
   if (SUBMISSION_FIELD_LABELS[key]) return SUBMISSION_FIELD_LABELS[key];
   if (key.startsWith('affiliatedCenters.')) return 'Affiliated center details';
+  if (key.startsWith('documentUploads.')) return 'Document uploads';
   return key;
 };
 
@@ -303,7 +305,9 @@ function SubmissionForm({ user, onLogout }) {
       const autoSaved = localStorage.getItem('submissionFormAutoSave');
       if (autoSaved) {
         try {
-          const savedData = JSON.parse(autoSaved);
+          const restored = restoreSubmissionFiles(JSON.parse(autoSaved));
+          const savedData = restored.data;
+          if (restored.missingFiles) toast.warning('Please select your documents again. Files are uploaded only when you save a draft or submit.', { id: 'restore-files' });
           setFormData((prev) => ({
             ...prev,
             ...savedData,
@@ -361,7 +365,7 @@ function SubmissionForm({ user, onLogout }) {
       setAutoSaveStatus('Saving...');
       const timeoutId = setTimeout(() => {
         localStorage.setItem('submissionFormAutoSave', JSON.stringify(sanitizeFormData(formData)));
-        setAutoSaveStatus('Auto-saved');
+        setAutoSaveStatus('Text auto-saved; save draft to upload files');
         setTimeout(() => setAutoSaveStatus(''), 2000);
       }, 1000);
 
@@ -395,7 +399,9 @@ function SubmissionForm({ user, onLogout }) {
         return;
       }
       if (submission.formData) {
-        const fd = submission.formData;
+        const restored = restoreSubmissionFiles(submission.formData);
+        const fd = restored.data;
+        if (restored.missingFiles) toast.warning('Some documents were not uploaded. Please select them again and save.', { id: 'restore-files' });
         setFormData({
           ...fd,
           affiliatedCentersCount: fd.affiliatedCentersCount || '1',
@@ -499,7 +505,9 @@ function SubmissionForm({ user, onLogout }) {
     const maxFiles = FILE_LIMITS[field] ?? 5;
     setFormData((prev) => {
       const existing = prev[field] || [];
-      const combined = [...existing, ...fileArray].slice(0, maxFiles);
+      const kept = isRevision ? existing.filter(isUploadedFile) : [];
+      const editable = isRevision ? existing.filter((file) => !isUploadedFile(file)) : existing;
+      const combined = [...kept, ...[...editable, ...fileArray].slice(0, maxFiles)];
       return { ...prev, [field]: combined };
     });
   };
@@ -528,7 +536,7 @@ function SubmissionForm({ user, onLogout }) {
     }
     setFormData((prev) => {
       const existing = prev.ethicsApprovalDocuments || [];
-      return { ...prev, ethicsApprovalDocuments: [...existing, ...valid].slice(0, 1) };
+      return { ...prev, ethicsApprovalDocuments: [...(isRevision ? existing.filter(isUploadedFile) : []), ...valid.slice(0, 1)] };
     });
   };
 
@@ -545,7 +553,7 @@ function SubmissionForm({ user, onLogout }) {
     setFormData((prev) => ({
       ...prev,
       documentUploads: (prev.documentUploads || []).map((upload, i) =>
-        i === index
+        i === index && !(isRevision && !checked && upload[`${language}Files`]?.some(isUploadedFile))
           ? {
               ...upload,
               languages: { ...upload.languages, [language]: checked },
@@ -558,7 +566,13 @@ function SubmissionForm({ user, onLogout }) {
 
   const handleDocumentUploadFiles = (index, language, files) => {
     const selectedFiles = Array.from(files || []).slice(0, 1);
-    updateDocumentUpload(index, { [`${language}Files`]: selectedFiles });
+    if (!selectedFiles.length) return;
+    setFormData((prev) => ({
+      ...prev,
+      documentUploads: prev.documentUploads.map((upload, i) => i === index
+        ? { ...upload, [`${language}Files`]: [...(isRevision ? upload[`${language}Files`].filter(isUploadedFile) : []), ...selectedFiles] }
+        : upload),
+    }));
   };
 
   const removeDocumentUploadFile = (index, language, fileIndex) => {
@@ -742,6 +756,17 @@ function SubmissionForm({ user, onLogout }) {
         req('expectedOutcomes', formData.expectedOutcomes?.trim());
         req('references', formData.references?.trim());
         break;
+      case 8:
+        (formData.documentUploads || []).forEach((upload, index) => {
+          const key = `documentUploads.${index}`;
+          req(`${key}.type`, upload.type, 'Select a document type.');
+          if (upload.type === 'Other') req(`${key}.otherType`, upload.otherType?.trim(), 'Specify the document type.');
+          req(`${key}.languages`, upload.languages?.english || upload.languages?.arabic, 'Select at least one language.');
+          for (const language of ['english', 'arabic']) {
+            if (upload.languages?.[language]) req(`${key}.${language}`, upload[`${language}Files`]?.some((file) => file instanceof File || isUploadedFile(file)), `Upload the ${language} document.`);
+          }
+        });
+        break;
       default:
         break;
     }
@@ -831,7 +856,8 @@ function SubmissionForm({ user, onLogout }) {
       };
 
       if (id) {
-        await updateSubmission(id, submissionData);
+        const saved = await updateSubmission(id, submissionData);
+        setFormData(saved.formData);
       } else {
         const newSubmission = await createSubmission({ ...submissionData, status: 'draft' });
         clearAutoSave();
@@ -1293,7 +1319,7 @@ function SubmissionForm({ user, onLogout }) {
           </Field>
           {formData.previousEthicsProjectApproved === 'Yes' && (
             <Field label="Please attach a copy of ethics approval(s) obtained." required error={fieldErrors.ethicsApprovalDocuments}>
-              <FileUpload field="ethicsApprovalDocuments" files={formData.ethicsApprovalDocuments} onAdd={(_, files) => handleEthicsApprovalFiles(files)} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} error={fieldErrors.ethicsApprovalDocuments} />
+              <FileUpload field="ethicsApprovalDocuments" files={formData.ethicsApprovalDocuments} onAdd={(_, files) => handleEthicsApprovalFiles(files)} onRemove={removeFile} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} maxSize={ETHICS_APPROVAL_MAX_FILE_BYTES} error={fieldErrors.ethicsApprovalDocuments} />
             </Field>
           )}
         </>
@@ -1500,6 +1526,7 @@ function SubmissionForm({ user, onLogout }) {
               type="button"
               variant="ghost"
               size="icon"
+              disabled={isRevision && [...upload.englishFiles, ...upload.arabicFiles].some(isUploadedFile)}
               onClick={() => setFormData((prev) => ({ ...prev, documentUploads: prev.documentUploads.filter((_, i) => i !== index) }))}
               aria-label={`Remove document ${index + 1}`}
             >
@@ -1507,7 +1534,7 @@ function SubmissionForm({ user, onLogout }) {
             </Button>
           </div>
 
-          <Field label="Document type">
+          <Field label="Document type" error={fieldErrors[`documentUploads.${index}.type`]}>
             <Select value={upload.type} onValueChange={(type) => updateDocumentUpload(index, { type, otherType: type === 'Other' ? upload.otherType : '' })}>
               <SelectTrigger><SelectValue placeholder="Select document type" /></SelectTrigger>
               <SelectContent>
@@ -1517,7 +1544,7 @@ function SubmissionForm({ user, onLogout }) {
           </Field>
 
           {upload.type === 'Other' && (
-            <Field label="Specify document type">
+            <Field label="Specify document type" error={fieldErrors[`documentUploads.${index}.otherType`]}>
               <Input value={upload.otherType} onChange={(e) => updateDocumentUpload(index, { otherType: e.target.value })} placeholder="Enter document type" />
             </Field>
           )}
@@ -1526,19 +1553,20 @@ function SubmissionForm({ user, onLogout }) {
             <>
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">Document language</p>
+                {fieldErrors[`documentUploads.${index}.languages`] && <p className="text-xs text-destructive">{fieldErrors[`documentUploads.${index}.languages`]}</p>}
                 <div className="flex flex-wrap gap-4">
-                  <CheckboxField checked={upload.languages?.english} onChange={(checked) => setDocumentLanguage(index, 'english', checked)}>English</CheckboxField>
-                  <CheckboxField checked={upload.languages?.arabic} onChange={(checked) => setDocumentLanguage(index, 'arabic', checked)}>Arabic</CheckboxField>
+                  <CheckboxField checked={upload.languages?.english} disabled={isRevision && upload.englishFiles.some(isUploadedFile)} onChange={(checked) => setDocumentLanguage(index, 'english', checked)}>English</CheckboxField>
+                  <CheckboxField checked={upload.languages?.arabic} disabled={isRevision && upload.arabicFiles.some(isUploadedFile)} onChange={(checked) => setDocumentLanguage(index, 'arabic', checked)}>Arabic</CheckboxField>
                 </div>
               </div>
 
               {upload.languages?.english && (
-                <Field label="Upload English document">
+                <Field label="Upload English document" error={fieldErrors[`documentUploads.${index}.english`]}>
                   <FileUpload field={`document-upload-${index}-english`} files={upload.englishFiles} onAdd={(_, files) => handleDocumentUploadFiles(index, 'english', files)} onRemove={(_, fileIndex) => removeDocumentUploadFile(index, 'english', fileIndex)} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} />
                 </Field>
               )}
               {upload.languages?.arabic && (
-                <Field label="Upload Arabic document">
+                <Field label="Upload Arabic document" error={fieldErrors[`documentUploads.${index}.arabic`]}>
                   <FileUpload field={`document-upload-${index}-arabic`} files={upload.arabicFiles} onAdd={(_, files) => handleDocumentUploadFiles(index, 'arabic', files)} onRemove={(_, fileIndex) => removeDocumentUploadFile(index, 'arabic', fileIndex)} getFileName={getFileName} lockExisting={isRevision} accept=".pdf,.doc,.docx" maxFiles={1} />
                 </Field>
               )}
@@ -1601,7 +1629,7 @@ function SubmissionForm({ user, onLogout }) {
           <CardContent className="space-y-6">
             <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={handleStepClick} />
 
-            <div className="border-t border-border pt-6">{STEP_RENDERERS[currentStep]?.()}</div>
+            <fieldset disabled={saving || loading} className="min-w-0 border-t border-border pt-6">{STEP_RENDERERS[currentStep]?.()}</fieldset>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
               <div className="flex items-center gap-3">
@@ -1618,7 +1646,7 @@ function SubmissionForm({ user, onLogout }) {
                 )}
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handleSave} disabled={saving}>
+                <Button variant="outline" onClick={handleSave} disabled={saving || loading}>
                   {saving ? <Loader2 className="animate-spin" /> : <Save />}
                   {saving ? 'Saving...' : isAwaitingAdminView ? 'Save Changes' : 'Save Draft'}
                 </Button>

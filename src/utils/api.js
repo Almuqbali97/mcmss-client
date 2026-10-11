@@ -140,7 +140,7 @@ const buildSubmissionFormData = (data) => {
         const files = Array.isArray(item[field]) ? item[field] : [];
         const newFiles = files.filter((file) => file instanceof File);
         item[field] = files.filter((file) => !(file instanceof File));
-        item[`${language}HasNewFile`] = newFiles.length > 0;
+        item[`${language}NewFileCount`] = newFiles.length;
         for (const file of newFiles) fd.append(`documentUpload${language[0].toUpperCase()}${language.slice(1)}`, file);
       }
       return item;

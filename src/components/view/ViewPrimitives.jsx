@@ -42,9 +42,10 @@ export function FileList({ files, label }) {
           <li key={index}>
             {file.path ? (
               <a
-                href={`${API_ORIGIN}${file.path}`}
+                href={`${API_ORIGIN}${file.path}${/\.docx?$/i.test(file.path) ? '/preview' : ''}`}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
+                title="Open document in a new tab or window"
                 className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
               >
                 <FileText className="size-4" />

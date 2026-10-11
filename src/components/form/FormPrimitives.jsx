@@ -133,10 +133,10 @@ export function OptionRadioGroup({ value, onChange, options, className, disabled
 }
 
 /* Checkbox row with label */
-export function CheckboxField({ checked, onChange, children, className }) {
+export function CheckboxField({ checked, onChange, children, className, disabled }) {
   return (
     <label className={cn('flex cursor-pointer items-start gap-3 text-sm leading-relaxed', className)}>
-      <Checkbox checked={checked} onCheckedChange={onChange} className="mt-0.5" />
+      <Checkbox checked={checked} onCheckedChange={onChange} disabled={disabled} className="mt-0.5" />
       <span>{children}</span>
     </label>
   );
@@ -153,12 +153,44 @@ export function FileUpload({
   maxFiles = 5,
   error,
   lockExisting = false,
+  maxSize = accept.includes('.png') ? 100 * 1024 * 1024 : 1024 * 1024 * 1024,
 }) {
   const inputId = `file-${field}`;
+  const [selectionError, setSelectionError] = useState('');
+  const addFiles = (selected) => {
+    const incoming = Array.from(selected || []);
+    if (!incoming.length) return;
+    const extensions = accept.split(',').map((extension) => extension.trim().toLowerCase());
+    const invalid = incoming.find((file) => !extensions.some((extension) => file.name.toLowerCase().endsWith(extension)));
+    if (invalid) {
+      setSelectionError(`File "${invalid.name}" is not supported. Use ${accept.replaceAll('.', '').toUpperCase()}.`);
+      return;
+    }
+    const oversized = incoming.find((file) => file.size > maxSize);
+    if (oversized) {
+      setSelectionError(`File "${oversized.name}" exceeds ${Math.round(maxSize / 1024 / 1024)} MB.`);
+      return;
+    }
+    // Single-file fields replace the pending selection; locked versions are retained separately.
+    const currentCount = (files || []).filter((file) => !lockExisting || file instanceof File).length;
+    const count = maxFiles === 1 ? incoming.length : currentCount + incoming.length;
+    if (count > maxFiles) {
+      setSelectionError(`You can select at most ${maxFiles} files. Remove a file before adding another.`);
+      return;
+    }
+    setSelectionError('');
+    onAdd(field, incoming);
+  };
   return (
     <div className="space-y-2">
       <label
         htmlFor={inputId}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          if (event.currentTarget.closest('fieldset')?.disabled) return;
+          addFiles(event.dataTransfer.files);
+        }}
         className={cn(
           'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 px-4 py-6 text-center transition-colors hover:border-primary/50 hover:bg-accent',
           error && 'border-destructive'
@@ -169,7 +201,7 @@ export function FileUpload({
           {maxFiles === 1 ? 'Click to upload file' : 'Click to upload files'}
         </span>
         <span className="text-xs text-muted-foreground">
-          PDF, DOC, DOCX, JPG, PNG (max {maxFiles} file{maxFiles === 1 ? '' : 's'})
+          {accept.replaceAll('.', '').toUpperCase()} (max {maxFiles} file{maxFiles === 1 ? '' : 's'} per selection)
         </span>
         <input
           id={inputId}
@@ -177,9 +209,13 @@ export function FileUpload({
           multiple={maxFiles > 1}
           accept={accept}
           className="hidden"
-          onChange={(e) => onAdd(field, e.target.files)}
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = '';
+          }}
         />
       </label>
+      {selectionError && <p role="alert" className="text-xs text-destructive">{selectionError}</p>}
       {files?.length > 0 && (
         <ul className="space-y-1.5">
           {files.map((file, index) => {
