@@ -4,7 +4,7 @@ import { getSubmission, updateFieldComments, saveReviewDraft, issueReview, appro
 import { getDefaultRouteForRole } from '../utils/roleRoutes';
 import AppHeader from './AppHeader';
 import { StatusBadge, REVIEW_DECISIONS } from './StatusBadge';
-import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
+import { cn, REVISION_STATUSES, formatRemaining, remainingTone, canResearcherEdit } from '@/lib/utils';
 import { SectionCard, InfoRow, InfoGrid, FileList } from './view/ViewPrimitives';
 import SubmissionHistory from './view/SubmissionHistory';
 import { Button } from '@/components/ui/button';
@@ -37,8 +37,6 @@ const SECTION7_FIELDS = [
   { key: 'references', label: 'References' },
 ];
 
-const EDITABLE_STATUSES = ['draft', ...REVISION_STATUSES];
-
 function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -62,8 +60,8 @@ function ViewSubmission({ user, onLogout }) {
   const piDeclarationApproved = submission?.piDeclarationApproval?.status === 'approved';
   // The submitter viewing their own submission is never acting as its reviewer, even if
   // they hold reviewer capability. The backend only serves this to submitter/assigned-reviewer/admin.
-  const submitterId = submission?.submittedBy?._id || submission?.submittedBy?.id;
-  const isSubmitter = !!submitterId && String(submitterId) === String(user?.id);
+  const submitterId = submission?.submittedBy?._id || submission?.submittedBy?.id || submission?.submittedBy;
+  const isSubmitter = !!submitterId && String(submitterId) === String(user?.id || user?._id);
   // Identify the assigned reviewer by matching their reviewer-record email to the logged-in
   // user, rather than the global `isReviewer` flag which can be stale in an existing session
   // (it is only refreshed on the next login after the admin grants reviewer capability).
@@ -86,10 +84,8 @@ function ViewSubmission({ user, onLogout }) {
     ['draft', 'issued'].includes(submission?.reviewDraft?.state || 'draft');
   const canComment = (isAssignedReviewer && reviewUnlocked) || adminCanEditComments;
   const canSubmitReview = isAssignedReviewer && reviewUnlocked;
-  const canEdit = user?.role === 'researcher' && (
-    EDITABLE_STATUSES.includes(submission?.status) ||
-    (submission?.status === 'under_review' && !submission?.adminViewedAt)
-  );
+  const canEdit = user?.role === 'researcher' && isSubmitter && canResearcherEdit(submission);
+  const hideReviewComments = isSubmitter && !isAdmin && submission?.researcherEditEnabled === true;
 
   useEffect(() => {
     loadSubmission();
@@ -295,7 +291,7 @@ function ViewSubmission({ user, onLogout }) {
           <>
             {canEdit && (
               <Button size="sm" onClick={() => navigate(`/submission/${id}/edit`)}>
-                {REVISION_STATUSES.includes(submission?.status) ? 'Revise' : 'Edit'}
+                {!submission.researcherEditEnabled && REVISION_STATUSES.includes(submission?.status) ? 'Revise' : 'Edit'}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => navigate(backPath)}>
@@ -306,6 +302,9 @@ function ViewSubmission({ user, onLogout }) {
       />
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
+        {submission.researcherEditEnabled && (
+          <Alert><AlertDescription>Researcher editing is enabled. Reviewer comments are hidden from the researcher until edits are closed.</AlertDescription></Alert>
+        )}
         <Card>
           <CardContent className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -619,7 +618,7 @@ function ViewSubmission({ user, onLogout }) {
                   />
                 </div>
               )}
-              {!canComment && comment && (
+              {!hideReviewComments && !canComment && comment && (
                 <div className="rounded-md border border-info/30 bg-info-muted/40 p-3 text-sm">
                   <span className="font-medium text-foreground">Reviewer comment:</span>
                   <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{comment}</p>
@@ -666,7 +665,7 @@ function ViewSubmission({ user, onLogout }) {
           </SectionCard>
         )}
 
-        <SubmissionHistory submission={submission} isSubmitter={isSubmitter} />
+        {!hideReviewComments && <SubmissionHistory submission={submission} isSubmitter={isSubmitter} />}
 
         {isAssignedReviewer && underReview && !piDeclarationApproved && (
           <Alert>

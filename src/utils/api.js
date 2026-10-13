@@ -288,6 +288,11 @@ export const unsubmitReview = async (id) => {
   return getData(response);
 };
 
+export const setResearcherEditAccess = async (id, enabled) => {
+  const response = await api.patch(`/submissions/${id}/edit-access`, { enabled });
+  return getData(response);
+};
+
 export const extendRevisionDeadline = async (id, deadline) => {
   const response = await api.patch(`/submissions/${id}/revision-deadline`, { deadline });
   return getData(response);

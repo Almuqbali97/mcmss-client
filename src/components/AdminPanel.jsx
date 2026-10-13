@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   getSubmissions,
+  setResearcherEditAccess,
   assignReviewer,
   getReviewers,
   getReviewerCandidates,
@@ -138,6 +139,21 @@ function AdminPanel({ user, onLogout }) {
   const [submissionToDelete, setSubmissionToDelete] = useState(null);
   const [submissionToPermanentlyDelete, setSubmissionToPermanentlyDelete] = useState(null);
   const [deletingSubmission, setDeletingSubmission] = useState(false);
+  const [changingEditAccess, setChangingEditAccess] = useState(null);
+
+  const handleEditAccess = async (item) => {
+    const id = item._id || item.id;
+    setChangingEditAccess(id);
+    try {
+      const updated = await setResearcherEditAccess(id, item.researcherEditEnabled !== true);
+      setSubmissions((items) => items.map((entry) => (entry._id || entry.id) === id ? updated : entry));
+      toast.success(updated.researcherEditEnabled ? 'Researcher edits enabled. Reviewer comments are hidden.' : 'Researcher edits closed.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to change edit access.');
+    } finally {
+      setChangingEditAccess(null);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -445,6 +461,9 @@ function AdminPanel({ user, onLogout }) {
           <TableCell>{person}</TableCell>
           <TableCell>
             <StatusBadge submission={isPublicationTab ? undefined : item} status={item.status} />
+            {!isPublicationTab && item.researcherEditEnabled && (
+              <div className="mt-1 text-xs font-medium text-primary">Researcher editing enabled</div>
+            )}
             {!isPublicationTab && item.reviewDraft?.state === 'issued' && (
               <div className="mt-1 text-xs font-medium text-primary">Review awaiting admin approval</div>
             )}
@@ -471,6 +490,11 @@ function AdminPanel({ user, onLogout }) {
               </Button>
               {!isPublicationTab && (
                 <>
+                  {item.status !== 'draft' && (
+                    <Button variant="outline" size="sm" disabled={changingEditAccess !== null} onClick={() => handleEditAccess(item)}>
+                      {changingEditAccess === id ? 'Saving...' : item.researcherEditEnabled ? 'Close edits' : 'Enable edit'}
+                    </Button>
+                  )}
                   {['under_review', 'under_review_with_revisions'].includes(item.status) && !item.assignedReviewer && (
                     <Button size="sm" onClick={() => openAssignModal(item, type)}>
                       Assign

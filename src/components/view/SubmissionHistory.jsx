@@ -6,6 +6,7 @@ const eventLabels = {
   review_issued: 'Reviewer decision issued to administrator', review_returned: 'Review returned for editing',
   decision_released: 'Decision shared with researcher', decision_retrieved: 'Decision retrieved for editing',
   deadline_extended: 'Revision deadline extended',
+  edits_enabled: 'Researcher edits enabled', edits_closed: 'Researcher edits closed',
 };
 const label = (key) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase());
 const date = (value) => value ? new Date(value).toLocaleString() : 'Date not recorded';

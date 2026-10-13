@@ -1,9 +1,11 @@
 import { Badge } from '@/components/ui/badge';
+import { deriveSubmissionStatus } from '../utils/submissionStatus';
+export { deriveSubmissionStatus } from '../utils/submissionStatus';
 
 const STATUS_VARIANTS = {
   draft: 'muted',
   submitted: 'info',
-  incomplete_submission: 'warning',
+  awaiting_pi_confirmation: 'warning',
   under_review: 'info',
   under_review_with_revisions: 'info',
   in_review: 'info',
@@ -27,29 +29,9 @@ const STATUS_LABELS = {
   major_revisions: 'Major Revisions',
   under_review: 'Under Review',
   under_review_with_revisions: 'Under Review with Revisions',
-  incomplete_submission: 'Incomplete Submission',
+  awaiting_pi_confirmation: 'Awaiting PI confirmation',
   archived: 'Cancelled (Archived)',
 };
-
-/**
- * A submitted proposal stays "Incomplete Submission" until the required approvals
- * (Principal Investigator declaration, and supervisor for Masters/PhD) are granted.
- */
-export function deriveSubmissionStatus(submission) {
-  if (!submission) return 'draft';
-  const status = submission.status;
-  if (status !== 'under_review') return status;
-
-  const piStatus = submission.piDeclarationApproval?.status;
-  const piIncomplete = !!piStatus && piStatus !== 'approved';
-
-  const supRequired = submission.formData?.mastersOrPhd === 'Yes';
-  const supStatus = submission.supervisorApproval?.status;
-  const supIncomplete = supRequired && !!supStatus && supStatus !== 'approved';
-
-  if (piIncomplete || supIncomplete) return 'incomplete_submission';
-  return submission.revision?.round > 0 ? 'under_review_with_revisions' : status;
-}
 
 export const REVIEW_DECISIONS = [
   { value: 'approved', label: 'Approved' },

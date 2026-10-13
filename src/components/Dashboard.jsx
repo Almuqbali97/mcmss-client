@@ -10,7 +10,7 @@ import {
 } from '../utils/api';
 import AppHeader from './AppHeader';
 import { StatusBadge } from './StatusBadge';
-import { cn, REVISION_STATUSES, formatRemaining, remainingTone } from '@/lib/utils';
+import { cn, REVISION_STATUSES, formatRemaining, remainingTone, canResearcherEdit } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -191,6 +191,7 @@ function Dashboard({ user, onLogout }) {
                 </TableCell>
                 <TableCell>
                   <StatusBadge submission={isPublication ? undefined : item} status={item.status} />
+                  {!isPublication && item.researcherEditEnabled && <div className="mt-1 text-xs text-primary">Editing enabled</div>}
                   {!isPublication && item.revision?.deadline && (
                     <div className={cn('mt-1 text-xs', remainingTone(item.revision.deadline))}>
                       {formatRemaining(item.revision.deadline)}
@@ -203,9 +204,9 @@ function Dashboard({ user, onLogout }) {
                     <Button variant="outline" size="sm" onClick={() => navigate(`${basePath}/${id}`)}>
                       View
                     </Button>
-                    {EDITABLE_STATUSES.includes(item.status) && (
+                    {(isPublication ? EDITABLE_STATUSES.includes(item.status) : canResearcherEdit(item)) && (
                       <Button variant="secondary" size="sm" onClick={() => navigate(`${basePath}/${id}/edit`)}>
-                        {REVISION_STATUSES.includes(item.status) ? 'Revise' : 'Edit'}
+                        {!item.researcherEditEnabled && REVISION_STATUSES.includes(item.status) ? 'Revise' : 'Edit'}
                       </Button>
                     )}
                     {item.status === 'draft' && isPublication && (

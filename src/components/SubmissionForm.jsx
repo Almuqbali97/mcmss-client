@@ -33,7 +33,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { cn, REVISION_STATUSES } from '@/lib/utils';
+import { cn, REVISION_STATUSES, canResearcherEdit } from '@/lib/utils';
 
 const STEPS = [
   { id: 1, title: 'Terms & Conditions', section: 'section1' },
@@ -214,6 +214,7 @@ function SubmissionForm({ user, onLogout }) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessView, setShowSuccessView] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState(null);
+  const [adminEditingEnabled, setAdminEditingEnabled] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formData, setFormData] = useState({
     researchTitle: '',
@@ -393,8 +394,9 @@ function SubmissionForm({ user, onLogout }) {
     try {
       const submission = await getSubmission(id);
       setSubmissionStatus(submission.status);
-      if (submission.status === 'under_review_with_revisions' || (submission.status === 'under_review' && submission.adminViewedAt)) {
-        toast.error('This submission is under review and cannot be edited.');
+      setAdminEditingEnabled(submission.researcherEditEnabled === true);
+      if (!canResearcherEdit(submission)) {
+        toast.error('Editing is closed for this submission.');
         navigate(`/submission/${id}`, { replace: true });
         return;
       }
@@ -495,8 +497,8 @@ function SubmissionForm({ user, onLogout }) {
 
   // On a revision, previously uploaded files must be kept for the record. Researchers
   // may add new files but cannot delete existing ones.
-  const isRevision = REVISION_STATUSES.includes(submissionStatus);
-  const isAwaitingAdminView = submissionStatus === 'under_review';
+  const isRevision = !adminEditingEnabled && REVISION_STATUSES.includes(submissionStatus);
+  const isAwaitingAdminView = adminEditingEnabled || submissionStatus === 'under_review';
 
   const FILE_LIMITS = { informationSheetFiles: 2 };
 
@@ -1625,6 +1627,9 @@ function SubmissionForm({ user, onLogout }) {
       />
 
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        {adminEditingEnabled && (
+          <p className="mb-4 rounded-md border border-border p-4 text-sm">An admin has enabled editing. Save your changes here. Reviewer comments are hidden, and the admin can close edits at any time.</p>
+        )}
         <Card>
           <CardContent className="space-y-6">
             <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={handleStepClick} />
@@ -1693,7 +1698,7 @@ function SubmissionForm({ user, onLogout }) {
             <DialogTitle>{isAwaitingAdminView ? 'Confirm Changes' : 'Confirm Submission'}</DialogTitle>
             <DialogDescription>
               {isAwaitingAdminView
-                ? 'Save these changes to your submitted form? You can continue editing until an admin views it.'
+                ? (adminEditingEnabled ? 'Save these changes to your submitted form? You can continue editing until an admin closes edits.' : 'Save these changes to your submitted form? You can continue editing until an admin views it.')
                 : 'Are you sure you want to submit this form for review?'}
             </DialogDescription>
           </DialogHeader>

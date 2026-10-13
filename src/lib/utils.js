@@ -9,6 +9,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const REVISION_STATUSES = ['revisions_required', 'conditional_minor', 'major_revisions'];
 
+export function canResearcherEdit(submission) {
+  if (!submission) return false;
+  return submission.researcherEditEnabled ?? (
+    ['draft', ...REVISION_STATUSES].includes(submission.status) ||
+    (submission.status === 'under_review' && !submission.adminViewedAt)
+  );
+}
+
 /* Milliseconds left until the deadline, or null when no valid deadline. */
 export function msUntil(deadline) {
   if (!deadline) return null;
