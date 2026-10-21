@@ -82,7 +82,6 @@ function ViewSubmission({ user, onLogout }) {
   const reviewUnlocked = underReview && piDeclarationApproved && submission?.reviewDraft?.state !== 'issued';
   const adminCanEditComments = isAdmin && underReview &&
     ['draft', 'issued'].includes(submission?.reviewDraft?.state || 'draft');
-  const adminCanEditDecision = adminCanEditComments && submission?.reviewDraft?.state === 'issued';
   const canComment = (isAssignedReviewer && reviewUnlocked) || adminCanEditComments;
   const canSubmitReview = isAssignedReviewer && reviewUnlocked;
   const canEdit = user?.role === 'researcher' && isSubmitter && canResearcherEdit(submission);
@@ -156,10 +155,9 @@ function ViewSubmission({ user, onLogout }) {
     setSubmittingReview(true);
     try {
       await updateFieldComments(id, fieldComments);
-      const status = adminCanEditDecision ? reviewDecision.status : submission.reviewDraft?.status;
-      const updated = await saveReviewDraft(id, status, reviewDecision.comments);
+      const updated = await saveReviewDraft(id, reviewDecision.status, reviewDecision.comments);
       setSubmission(updated);
-      setReviewNotice(adminCanEditDecision ? 'Review decision and comments saved.' : 'Review comments saved.');
+      setReviewNotice('Review decision and comments saved.');
     } catch (error) {
       setReviewError(error.response?.data?.message || 'Failed to save review.');
     } finally {
@@ -746,35 +744,29 @@ function ViewSubmission({ user, onLogout }) {
               <CardTitle className="text-base">
                 {submission.reviewDraft?.state === 'issued'
                   ? 'Issued review awaiting admin approval'
-                  : submission.reviewDraft?.status ? 'Reviewer draft' : 'Admin comments'}
+                  : 'Admin review decision'}
               </CardTitle>
               <CardDescription>
-                {adminCanEditDecision
-                  ? 'Change the decision or comments before approving and sharing the review with the researcher.'
-                  : submission.reviewDraft?.status
-                  ? `Decision: ${REVIEW_DECISIONS.find((decision) => decision.value === submission.reviewDraft.status)?.label}`
-                  : 'No reviewer decision has been saved yet. Your comments remain private until a review is approved.'}
+                Choose a decision and add comments, even if the reviewer has not issued a review. Save review keeps your changes private; Approve and share releases the decision to the researcher.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {adminCanEditDecision && (
-                <div className="space-y-2">
-                  <Label htmlFor="adminReviewStatus">Decision</Label>
-                  <Select value={reviewDecision.status} onValueChange={(status) => setReviewDecision((previous) => ({ ...previous, status }))} disabled={submittingReview}>
-                    <SelectTrigger id="adminReviewStatus" className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {REVIEW_DECISIONS.map((decision) => (
-                        <SelectItem key={decision.value} value={decision.value}>{decision.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {REVISION_STATUSES.includes(reviewDecision.status) && (
-                    <p className="text-xs text-muted-foreground">
-                      The researcher will have {(submission.revision?.round || 0) >= 1 ? 7 : 30} days to resubmit after you approve and share this decision.
-                    </p>
-                  )}
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="adminReviewStatus">Decision</Label>
+                <Select value={reviewDecision.status} onValueChange={(status) => setReviewDecision((previous) => ({ ...previous, status }))} disabled={submittingReview}>
+                  <SelectTrigger id="adminReviewStatus" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {REVIEW_DECISIONS.map((decision) => (
+                      <SelectItem key={decision.value} value={decision.value}>{decision.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {REVISION_STATUSES.includes(reviewDecision.status) && (
+                  <p className="text-xs text-muted-foreground">
+                    The researcher will have {(submission.revision?.round || 0) >= 1 ? 7 : 30} days to resubmit after you approve and share this decision.
+                  </p>
+                )}
+              </div>
               <Label htmlFor="adminReviewComments">Overall comments</Label>
               <Textarea
                 id="adminReviewComments"
@@ -785,14 +777,15 @@ function ViewSubmission({ user, onLogout }) {
               />
               <p className="text-xs text-muted-foreground">Section comments can be edited beside the proposal fields in Section 7.</p>
               {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
+              {reviewNotice && <p className="text-sm text-green-700">{reviewNotice}</p>}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={handleAdminSaveReview} disabled={submittingReview}>
-                  {submittingReview ? 'Saving...' : adminCanEditDecision ? 'Save review' : 'Save comments'}
+                  {submittingReview ? 'Saving...' : 'Save review'}
                 </Button>
-                {submission.reviewDraft?.state === 'issued' && <>
-                  <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
+                <Button onClick={() => handleAdminReviewAction('approve')} disabled={submittingReview}>Approve and share</Button>
+                {submission.reviewDraft?.state === 'issued' && (
                   <Button variant="outline" onClick={() => handleAdminReviewAction('unsubmit')} disabled={submittingReview}>Unsubmit for editing</Button>
-                </>}
+                )}
               </div>
             </CardContent>
           </Card>
