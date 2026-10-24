@@ -37,6 +37,19 @@ const SECTION7_FIELDS = [
   { key: 'references', label: 'References' },
 ];
 
+const reviewSaveError = (error, fallback) => {
+  if (error.response?.status === 413) {
+    return 'The review comments are too large to save. Shorten them and try again. Your comments are still on this page.';
+  }
+  const data = error.response?.data;
+  if (Array.isArray(data?.errors) && data.errors.length) {
+    return `${data.message || fallback} ${data.errors.join(' ')}`;
+  }
+  if (data?.message) return data.message;
+  if (!error.response) return 'Could not reach the server. Your comments are still on this page. Please try saving again.';
+  return fallback;
+};
+
 function ViewSubmission({ user, onLogout }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -92,13 +105,9 @@ function ViewSubmission({ user, onLogout }) {
   }, [id]);
 
   useEffect(() => {
-    if (submission?.fieldComments) {
-      setFieldComments((isAdmin || isAssignedReviewer) && underReview
-        ? { ...submission.fieldComments, ...submission.reviewDraft?.fieldComments }
-        : submission.fieldComments);
-    } else {
-      setFieldComments({});
-    }
+    setFieldComments((isAdmin || isAssignedReviewer) && underReview
+      ? { ...submission?.fieldComments, ...submission?.reviewDraft?.fieldComments }
+      : (submission?.fieldComments || {}));
   }, [submission?.fieldComments, submission?.reviewDraft?.fieldComments, isAdmin, isAssignedReviewer, underReview]);
 
   const loadSubmission = async () => {
@@ -143,7 +152,7 @@ function ViewSubmission({ user, onLogout }) {
       setCommentsSaved(true);
       setTimeout(() => setCommentsSaved(false), 3000);
     } catch (error) {
-      setReviewError(error.response?.data?.message || 'Failed to save field comments.');
+      setReviewError(reviewSaveError(error, 'Failed to save field comments.'));
     } finally {
       setSavingComments(false);
     }
@@ -159,7 +168,7 @@ function ViewSubmission({ user, onLogout }) {
       setSubmission(updated);
       setReviewNotice('Review decision and comments saved.');
     } catch (error) {
-      setReviewError(error.response?.data?.message || 'Failed to save review.');
+      setReviewError(reviewSaveError(error, 'Failed to save review.'));
     } finally {
       setSubmittingReview(false);
     }
@@ -176,7 +185,7 @@ function ViewSubmission({ user, onLogout }) {
       setSubmission(updated);
       setReviewNotice(issue ? 'Review issued to the admin for approval.' : 'Review draft saved.');
     } catch (error) {
-      setReviewError(error.response?.data?.message || 'Failed to save review. Please try again.');
+      setReviewError(reviewSaveError(error, 'Failed to save review. Please try again.'));
     } finally {
       setSubmittingReview(false);
     }
@@ -202,7 +211,7 @@ function ViewSubmission({ user, onLogout }) {
           ? 'Released review retrieved. It is hidden from the researcher and editable by the reviewer.'
           : 'Review returned to the reviewer for editing.');
     } catch (error) {
-      setReviewError(error.response?.data?.message || 'Review action failed. Please try again.');
+      setReviewError(reviewSaveError(error, 'Review action failed. Please try again.'));
     } finally {
       setSubmittingReview(false);
     }
